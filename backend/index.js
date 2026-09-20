@@ -16,10 +16,12 @@ const PORT = process.env.PORT || 5000;
 app.use(express.urlencoded({extended:true}));
 app.use(express.json()); 
 app.use(cookieParser());
-const corsOption={
-    origin:"https://YOUR-VERCEL-URL.vercel.app",
-    credentials:true
+const corsOption = {
+    origin: "https://chat-app-frontend-xi-neon.vercel.app",
+    credentials: true
 };
+
+app.use(cors(corsOption));
 app.use(cors(corsOption)); 
 
 
