@@ -2,14 +2,32 @@ import { Server } from "socket.io";
 import http from "http";
 import express from "express";
 
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://chat-app-frontend-xi-neon.vercel.app',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+    if (!origin) return true;
+    if (allowedOrigins.includes(origin)) return true;
+    if (origin.endsWith(".vercel.app")) return true;
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
+    return false;
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: [
-            'http://localhost:3000',
-            'https://chat-app-frontend-xi-neon.vercel.app'
-        ],
+        origin: (origin, callback) => {
+            if (isOriginAllowed(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
+        },
         methods: ['GET', 'POST'],
         credentials: true,
     },

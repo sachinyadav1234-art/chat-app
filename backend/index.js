@@ -17,20 +17,40 @@ app.use(cookieParser());
 
 const allowedOrigins = [
     "http://localhost:3000",
+    "http://localhost:5173",
     "https://chat-app-frontend-xi-neon.vercel.app",
-];
+    process.env.FRONTEND_URL,
+].filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+    if (!origin) return true; // allow curl, mobile apps, Postman
+    if (allowedOrigins.includes(origin)) return true;
+    if (origin.endsWith(".vercel.app")) return true; // allow all Vercel previews & production
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
+    return false;
+};
 
 const corsOption = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (isOriginAllowed(origin)) {
             callback(null, true);
         } else {
             callback(new Error("Not allowed by CORS"));
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"]
 };
 app.use(cors(corsOption));
+
+// Health check endpoint
+app.get("/", (req, res) => {
+    res.status(200).json({ status: "ok", message: "Chat App Backend API is running successfully!" });
+});
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", uptime: process.uptime() });
+});
 
 // routes
 app.use("/api/v1/user", userRoute);
