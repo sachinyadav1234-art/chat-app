@@ -5,12 +5,32 @@ import App from './App';
 import { Toaster } from "react-hot-toast";
 import { Provider } from "react-redux";
 import store from './redux/store';
-import { PersistGate } from 'redux-persist/integration/react'
+import { PersistGate } from 'redux-persist/integration/react';
 import { persistStore } from 'redux-persist';
+import axios from 'axios';
 
 let persistor = persistStore(store);
 
-export const BASE_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+export const BASE_URL = process.env.REACT_APP_BACKEND_URL || "https://chat-app-backend-7wng.onrender.com";
+
+// ─── Global Axios Configuration & Dual Authentication Interceptor ─────────────
+// Attaches Bearer JWT token from state to every outgoing request + includes credentials
+axios.defaults.withCredentials = true;
+
+axios.interceptors.request.use((config) => {
+    try {
+        const state = store.getState();
+        const token = state.user?.token || state.user?.authUser?.token;
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+    } catch (e) {
+        console.warn("Could not attach auth header", e);
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -18,7 +38,7 @@ root.render(
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <App />
-        <Toaster />
+        <Toaster position="top-right" reverseOrder={false} />
       </PersistGate>
     </Provider>
   </React.StrictMode>

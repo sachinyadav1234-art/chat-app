@@ -1,17 +1,11 @@
 import express from "express";
 import {
-    getOtherUsers,
-    login,
-    logout,
-    register,
-    sendFriendRequest,
-    acceptFriendRequest,
-    rejectFriendRequest,
-    getFriends,
-    getFriendRequests,
-    searchUsers
+    getOtherUsers, login, logout, register,
+    sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
+    getFriends, getFriendRequests, searchUsers, updateProfile
 } from "../controllers/userController.js";
 import isAuthenticated from "../middleware/isAuthenticated.js";
+import { upload } from "../middleware/multer.js";
 
 const router = express.Router();
 
@@ -25,5 +19,6 @@ router.route("/friend-requests").get(isAuthenticated, getFriendRequests);
 router.route("/friend-request/send/:id").post(isAuthenticated, sendFriendRequest);
 router.route("/friend-request/accept/:id").post(isAuthenticated, acceptFriendRequest);
 router.route("/friend-request/reject/:id").post(isAuthenticated, rejectFriendRequest);
+router.route("/update-profile").post(isAuthenticated, upload.single("profilePhoto"), updateProfile);
 
 export default router;

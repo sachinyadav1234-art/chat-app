@@ -4,6 +4,7 @@ const userSlice = createSlice({
     name: "user",
     initialState: {
         authUser: null,
+        token: null,
         otherUsers: null,
         selectedUser: null,
         onlineUsers: null,
@@ -16,6 +17,14 @@ const userSlice = createSlice({
     reducers: {
         setAuthUser: (state, action) => {
             state.authUser = action.payload;
+            if (action.payload?.token) {
+                state.token = action.payload.token;
+            } else if (action.payload === null) {
+                state.token = null;
+            }
+        },
+        setToken: (state, action) => {
+            state.token = action.payload;
         },
         setOtherUsers: (state, action) => {
             state.otherUsers = action.payload;
@@ -30,8 +39,8 @@ const userSlice = createSlice({
             state.friends = action.payload;
         },
         setFriendRequests: (state, action) => {
-            state.friendRequests = action.payload;
-            state.friendRequestBadge = action.payload.length;
+            state.friendRequests = action.payload || [];
+            state.friendRequestBadge = (action.payload || []).length;
         },
         addFriendRequest: (state, action) => {
             state.friendRequests.push(action.payload);
@@ -39,7 +48,7 @@ const userSlice = createSlice({
         },
         removeFriendRequest: (state, action) => {
             state.friendRequests = state.friendRequests.filter(
-                r => r.sender._id !== action.payload
+                r => (r.sender?._id || r.sender) !== action.payload
             );
             state.friendRequestBadge = state.friendRequests.length;
         },
@@ -60,6 +69,7 @@ const userSlice = createSlice({
 
 export const {
     setAuthUser,
+    setToken,
     setOtherUsers,
     setSelectedUser,
     setOnlineUsers,

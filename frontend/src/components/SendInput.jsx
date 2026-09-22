@@ -15,7 +15,6 @@ const SendInput = () => {
     const { selectedUser } = useSelector(store => store.user);
     const { messages } = useSelector(store => store.message);
     const { socket } = useSelector(store => store.socket);
-    const { authUser } = useSelector(store => store.user);
     const typingTimeoutRef = useRef(null);
     const emojiRef = useRef(null);
 

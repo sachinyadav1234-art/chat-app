@@ -7,7 +7,6 @@ import {
     setCallEnded,
     setIsMuted,
     setIsVideoOff,
-    setReceivingCall,
 } from '../redux/callSlice';
 import { BsMicMuteFill, BsMicFill, BsCameraVideoOffFill, BsCameraVideoFill } from 'react-icons/bs';
 import { MdCallEnd, MdScreenShare, MdStopScreenShare } from 'react-icons/md';

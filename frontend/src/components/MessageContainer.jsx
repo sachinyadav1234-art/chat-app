@@ -9,7 +9,6 @@ import { HiDotsVertical } from 'react-icons/hi';
 
 const MessageContainer = () => {
     const { selectedUser, authUser, onlineUsers, typingUsers } = useSelector(store => store.user);
-    const { socket } = useSelector(store => store.socket);
     const dispatch = useDispatch();
 
     const isOnline = onlineUsers?.includes(selectedUser?._id);
