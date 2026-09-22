@@ -1,7 +1,8 @@
-import {combineReducers, configureStore} from "@reduxjs/toolkit";
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import userReducer from "./userSlice.js";
 import messageReducer from "./messageSlice.js";
 import socketReducer from "./socketSlice.js";
+import callReducer from "./callSlice.js";
 import {
     persistReducer,
     FLUSH,
@@ -10,31 +11,33 @@ import {
     PERSIST,
     PURGE,
     REGISTER,
-  } from 'redux-persist';
-  import storage from 'redux-persist/lib/storage'
+} from 'redux-persist';
+import storage from 'redux-persist/lib/storage';
 
-  const persistConfig = {
+const persistConfig = {
     key: 'root',
     version: 1,
     storage,
-  }
+    whitelist: ['user'],  // only persist user, not call/socket/message
+};
 
-  const rootReducer = combineReducers({
-    user:userReducer,
-    message:messageReducer,
-    socket:socketReducer
- })
+const rootReducer = combineReducers({
+    user: userReducer,
+    message: messageReducer,
+    socket: socketReducer,
+    call: callReducer,
+});
 
-const persistedReducer = persistReducer(persistConfig, rootReducer)
-
+const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 const store = configureStore({
-    reducer:persistedReducer,
+    reducer: persistedReducer,
     middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: {
-        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
-      },
-    }),
+        getDefaultMiddleware({
+            serializableCheck: {
+                ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+            },
+        }),
 });
+
 export default store;

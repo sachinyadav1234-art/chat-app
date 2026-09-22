@@ -1,31 +1,47 @@
-import React from 'react'
-import { useDispatch,useSelector } from "react-redux";
+import React from 'react';
+import { useDispatch, useSelector } from "react-redux";
 import { setSelectedUser } from '../redux/userSlice';
 
 const OtherUser = ({ user }) => {
     const dispatch = useDispatch();
-    const {selectedUser, onlineUsers} = useSelector(store=>store.user);
+    const { selectedUser, onlineUsers, typingUsers } = useSelector(store => store.user);
     const isOnline = onlineUsers?.includes(user._id);
-    const selectedUserHandler = (user) => {
-        dispatch(setSelectedUser(user));
-    }
-    return (
-        <>
-            <div onClick={() => selectedUserHandler(user)} className={` ${selectedUser?._id === user?._id ? 'bg-zinc-200 text-black' : 'text-white'} flex gap-2 hover:text-black items-center hover:bg-zinc-200 rounded p-2 cursor-pointer`}>
-                <div className={`avatar ${isOnline ? 'online' : '' }`}>
-                    <div className='w-12 rounded-full'>
-                        <img src={user?.profilePhoto} alt="user-profile" />
-                    </div>
-                </div>
-                <div className='flex flex-col flex-1'>
-                    <div className='flex justify-between gap-2 '>
-                        <p>{user?.fullName}</p>
-                    </div>
-                </div>
-            </div>
-            <div className='divider my-0 py-0 h-1'></div>
-        </>
-    )
-}
+    const isTyping = typingUsers?.[user._id];
+    const isSelected = selectedUser?._id === user?._id;
 
-export default OtherUser
+    return (
+        <div
+            onClick={() => dispatch(setSelectedUser(user))}
+            className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all border-b border-gray-800
+                ${isSelected ? 'bg-blue-600 bg-opacity-20 border-l-2 border-l-blue-500' : 'hover:bg-gray-800'}`}
+        >
+            <div className="relative flex-shrink-0">
+                <img
+                    src={user?.profilePhoto}
+                    alt={user?.fullName}
+                    className="w-11 h-11 rounded-full object-cover"
+                />
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-600'}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className={`font-medium text-sm truncate ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+                    {user?.fullName}
+                </p>
+                <p className="text-xs truncate text-gray-500">
+                    {isTyping ? (
+                        <span className="text-green-400 italic flex items-center gap-1">
+                            <span>typing</span>
+                            <span className="flex gap-0.5">
+                                <span className="inline-block w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                <span className="inline-block w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="inline-block w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </span>
+                        </span>
+                    ) : isOnline ? 'Online' : 'Offline'}
+                </p>
+            </div>
+        </div>
+    );
+};
+
+export default OtherUser;

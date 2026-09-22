@@ -1,64 +1,101 @@
 import Signup from './components/Signup';
 import './App.css';
-import {createBrowserRouter, RouterProvider} from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import HomePage from './components/HomePage';
 import Login from './components/Login';
-import { useEffect, useState } from 'react';
-import {useSelector,useDispatch} from "react-redux";
+import { useEffect } from 'react';
+import { useSelector, useDispatch } from "react-redux";
 import io from "socket.io-client";
 import { setSocket } from './redux/socketSlice';
-import { setOnlineUsers } from './redux/userSlice';
+import { setOnlineUsers, addFriendRequest, addFriend, setTypingUser } from './redux/userSlice';
+import {
+    setReceivingCall,
+    setCaller,
+    setCallerSignal,
+    setCallType
+} from './redux/callSlice';
 import { BASE_URL } from '.';
+import CallModal from './components/CallModal';
 
 const router = createBrowserRouter([
-  {
-    path:"/",
-    element:<HomePage/>
-  },
-  {
-    path:"/signup",
-    element:<Signup/>
-  },
-  {
-    path:"/login",
-    element:<Login/>
-  },
+    {
+        path: "/",
+        element: <HomePage />
+    },
+    {
+        path: "/signup",
+        element: <Signup />
+    },
+    {
+        path: "/login",
+        element: <Login />
+    },
+]);
 
-])
+function App() {
+    const { authUser } = useSelector(store => store.user);
+    const { socket } = useSelector(store => store.socket);
+    const dispatch = useDispatch();
 
-function App() { 
-  const {authUser} = useSelector(store=>store.user);
-  const {socket} = useSelector(store=>store.socket);
-  const dispatch = useDispatch();
+    useEffect(() => {
+        if (authUser) {
+            const socketio = io(`${BASE_URL}`, {
+                query: { userId: authUser._id }
+            });
+            dispatch(setSocket(socketio));
 
-  useEffect(()=>{
-    if(authUser){
-      const socketio = io(`${BASE_URL}`, {
-          query:{
-            userId:authUser._id
-          }
-      });
-      dispatch(setSocket(socketio));
+            // Online users
+            socketio.on('getOnlineUsers', (onlineUsers) => {
+                dispatch(setOnlineUsers(onlineUsers));
+            });
 
-      socketio?.on('getOnlineUsers', (onlineUsers)=>{
-        dispatch(setOnlineUsers(onlineUsers))
-      });
-      return () => socketio.close();
-    }else{
-      if(socket){
-        socket.close();
-        dispatch(setSocket(null));
-      }
-    }
+            // Typing indicators
+            socketio.on('typing', ({ from }) => {
+                dispatch(setTypingUser({ userId: from, isTyping: true }));
+            });
+            socketio.on('stopTyping', ({ from }) => {
+                dispatch(setTypingUser({ userId: from, isTyping: false }));
+            });
 
-  },[authUser]);
+            // Friend request notifications
+            socketio.on('newFriendRequest', (sender) => {
+                dispatch(addFriendRequest({ sender, _id: sender._id }));
+            });
+            socketio.on('friendRequestAccepted', (newFriend) => {
+                dispatch(addFriend(newFriend));
+            });
 
-  return (
-    <div className="p-4 h-screen flex items-center justify-center">
-      <RouterProvider router={router}/>
-    </div>
+            // WebRTC — incoming call
+            socketio.on('incomingCall', ({ signal, from, fromUser, callType }) => {
+                dispatch(setReceivingCall(true));
+                dispatch(setCaller(fromUser || { _id: from }));
+                dispatch(setCallerSignal(signal));
+                dispatch(setCallType(callType));
+            });
 
-  );
+            return () => {
+                socketio.off('getOnlineUsers');
+                socketio.off('typing');
+                socketio.off('stopTyping');
+                socketio.off('newFriendRequest');
+                socketio.off('friendRequestAccepted');
+                socketio.off('incomingCall');
+                socketio.close();
+            };
+        } else {
+            if (socket) {
+                socket.close();
+                dispatch(setSocket(null));
+            }
+        }
+    }, [authUser]);
+
+    return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+            <RouterProvider router={router} />
+            {authUser && <CallModal />}
+        </div>
+    );
 }
 
 export default App;
