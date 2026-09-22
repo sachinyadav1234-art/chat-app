@@ -91,7 +91,7 @@ function App() {
     }, [authUser]);
 
     return (
-        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="min-h-screen w-full bg-gray-950 flex flex-col">
             <RouterProvider router={router} />
             {authUser && <CallModal />}
         </div>

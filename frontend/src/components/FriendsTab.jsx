@@ -84,7 +84,7 @@ const FriendsTab = () => {
                             <p className="text-white font-medium text-sm truncate">{friend.fullName}</p>
                             <p className="text-gray-500 text-xs">{isOnline ? '🟢 Online' : '⚪ Offline'}</p>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all">
                             <button
                                 onClick={() => startChat(friend)}
                                 className="p-2 rounded-full hover:bg-blue-600 text-gray-400 hover:text-white transition-all"

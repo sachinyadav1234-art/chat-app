@@ -23,14 +23,15 @@ const MessageContainer = () => {
     return (
         <>
             {selectedUser !== null ? (
-                <div className="flex-1 flex flex-col bg-gray-950 min-h-0">
+                <div className="w-full h-full flex-1 flex flex-col bg-gray-950 min-h-0">
                     {/* ─── Header ─── */}
-                    <div className="flex items-center gap-3 px-4 py-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
+                    <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
                         <button
                             onClick={() => dispatch(setSelectedUser(null))}
-                            className="md:hidden p-1 text-gray-400 hover:text-white"
+                            className="md:hidden p-2 -ml-1 text-gray-400 hover:text-white rounded-full hover:bg-gray-800 active:scale-95 transition-all flex items-center justify-center"
+                            title="Back to chats"
                         >
-                            <IoArrowBackOutline className="w-5 h-5" />
+                            <IoArrowBackOutline className="w-5 h-5 text-gray-200" />
                         </button>
 
                         <div className="relative">

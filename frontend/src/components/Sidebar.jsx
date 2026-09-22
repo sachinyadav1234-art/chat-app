@@ -62,7 +62,7 @@ const Sidebar = () => {
 
     return (
         <>
-            <div className="w-72 flex flex-col bg-gray-900 border-r border-gray-800 min-h-0">
+            <div className="w-full h-full flex flex-col bg-gray-900 min-h-0">
                 {/* ─── User Profile Header ─── */}
                 <div className="flex items-center gap-3 p-4 border-b border-gray-800 bg-gray-900">
                     {/* Clickable avatar → edit profile */}
