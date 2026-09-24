@@ -11,6 +11,10 @@ import axios from 'axios';
 
 let persistor = persistStore(store);
 
+if (typeof window !== 'undefined' && !window.global) {
+    window.global = window;
+}
+
 export const BASE_URL = process.env.REACT_APP_BACKEND_URL || "https://chat-app-backend-7wng.onrender.com";
 
 // ─── Global Axios Configuration & Dual Authentication Interceptor ─────────────

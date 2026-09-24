@@ -3,7 +3,7 @@ import SendInput from './SendInput';
 import Messages from './Messages';
 import { useSelector, useDispatch } from "react-redux";
 import { setSelectedUser } from '../redux/userSlice';
-import { setCaller, setCallType, setIsCalling } from '../redux/callSlice';
+import { setTargetUser, setCallType, setIsCalling } from '../redux/callSlice';
 import { IoCallOutline, IoVideocamOutline, IoArrowBackOutline } from 'react-icons/io5';
 import { HiDotsVertical } from 'react-icons/hi';
 
@@ -16,7 +16,7 @@ const MessageContainer = () => {
 
     const startCall = (type) => {
         dispatch(setCallType(type));
-        dispatch(setCaller(selectedUser));
+        dispatch(setTargetUser(selectedUser));
         dispatch(setIsCalling(true));
     };
 

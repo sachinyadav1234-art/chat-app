@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useDispatch, useSelector } from 'react-redux';
 import { setFriends, setSelectedUser } from '../redux/userSlice';
-import { setCaller, setCallType, setIsCalling } from '../redux/callSlice';
+import { setTargetUser, setCallType, setIsCalling } from '../redux/callSlice';
 import { BASE_URL } from '..';
 import { IoCallOutline, IoChatbubbleOutline, IoPeopleOutline } from 'react-icons/io5';
 import { BsCameraVideoFill } from 'react-icons/bs';
@@ -35,8 +35,9 @@ const FriendsTab = () => {
     };
 
     const startCall = (friend, type) => {
+        dispatch(setSelectedUser(friend));
         dispatch(setCallType(type));
-        dispatch(setCaller(friend));
+        dispatch(setTargetUser(friend));
         dispatch(setIsCalling(true));
     };
 

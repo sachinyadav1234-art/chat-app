@@ -72,6 +72,8 @@ io.on('connection', (socket) => {
                 fromUser,
                 callType
             });
+        } else {
+            socket.emit('callRejected', { reason: 'User is currently offline' });
         }
     });
 
@@ -85,7 +87,7 @@ io.on('connection', (socket) => {
     socket.on('rejectCall', ({ to }) => {
         const callerSocketId = userSocketMap[to];
         if (callerSocketId) {
-            io.to(callerSocketId).emit('callRejected');
+            io.to(callerSocketId).emit('callRejected', { reason: 'Call declined' });
         }
     });
 
