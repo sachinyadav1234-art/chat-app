@@ -80,9 +80,10 @@ function App() {
 
     // Socket Connection & Event Listeners
     useEffect(() => {
-        if (authUser) {
+        if (authUser && authUser._id) {
             const socketio = io(`${BASE_URL}`, {
                 query: { userId: authUser._id },
+                transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
