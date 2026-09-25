@@ -5,9 +5,9 @@ const userSlice = createSlice({
     initialState: {
         authUser: null,
         token: null,
-        otherUsers: null,
+        otherUsers: [],
         selectedUser: null,
-        onlineUsers: null,
+        onlineUsers: [],
         friends: [],
         friendRequests: [],       // incoming pending requests
         searchResultUsers: [],
@@ -19,7 +19,7 @@ const userSlice = createSlice({
             if (action.payload === null) {
                 state.authUser = null;
                 state.token = null;
-                state.otherUsers = null;
+                state.otherUsers = [];
                 state.selectedUser = null;
                 state.onlineUsers = [];
                 state.friends = [];
@@ -38,7 +38,7 @@ const userSlice = createSlice({
             state.token = action.payload;
         },
         setOtherUsers: (state, action) => {
-            state.otherUsers = action.payload;
+            state.otherUsers = Array.isArray(action.payload) ? action.payload : [];
         },
         setSelectedUser: (state, action) => {
             state.selectedUser = action.payload;
@@ -47,11 +47,11 @@ const userSlice = createSlice({
             state.onlineUsers = action.payload || [];
         },
         setFriends: (state, action) => {
-            state.friends = action.payload || [];
+            state.friends = Array.isArray(action.payload) ? action.payload : [];
         },
         setFriendRequests: (state, action) => {
-            state.friendRequests = action.payload || [];
-            state.friendRequestBadge = (action.payload || []).length;
+            state.friendRequests = Array.isArray(action.payload) ? action.payload : [];
+            state.friendRequestBadge = state.friendRequests.length;
         },
         addFriendRequest: (state, action) => {
             const newReq = action.payload;

@@ -20,6 +20,7 @@ export const BASE_URL = process.env.REACT_APP_BACKEND_URL || "https://chat-app-b
 // ─── Global Axios Configuration & Dual Authentication Interceptor ─────────────
 // Attaches Bearer JWT token from state to every outgoing request + includes credentials
 axios.defaults.withCredentials = true;
+axios.defaults.timeout = 15000; // 15 seconds timeout to prevent hanging requests
 
 axios.interceptors.request.use((config) => {
     try {
@@ -35,6 +36,16 @@ axios.interceptors.request.use((config) => {
 }, (error) => {
     return Promise.reject(error);
 });
+
+axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            console.error("API Request timed out:", error.config?.url);
+        }
+        return Promise.reject(error);
+    }
+);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

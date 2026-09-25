@@ -19,6 +19,7 @@ const useGetMessages = () => {
                 dispatch(setMessages(res.data || []));
             } catch (error) {
                 console.error("Fetch messages error:", error);
+                dispatch(setMessages([]));
             }
         };
         fetchMessages();

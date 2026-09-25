@@ -70,7 +70,7 @@ const FriendRequestsTab = () => {
         }
     };
 
-    if (loading) {
+    if (loading && (!friendRequests || friendRequests.length === 0)) {
         return (
             <div className="flex-1 flex items-center justify-center">
                 <span className="loading loading-spinner text-primary"></span>

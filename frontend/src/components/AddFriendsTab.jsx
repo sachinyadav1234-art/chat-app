@@ -39,18 +39,19 @@ const AddFriendsTab = () => {
         }
     }, [token]);
 
-    // Initial load: Fetch suggested users immediately
+    // Debounced Live Search as user types (and immediate initial load)
     useEffect(() => {
-        fetchUsers('');
-    }, [fetchUsers]);
+        let isMounted = true;
+        const timer = setTimeout(async () => {
+            if (isMounted) {
+                await fetchUsers(searchQuery);
+            }
+        }, searchQuery ? 300 : 0);
 
-    // Debounced Live Search as user types
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchUsers(searchQuery);
-        }, 350);
-
-        return () => clearTimeout(timer);
+        return () => {
+            isMounted = false;
+            clearTimeout(timer);
+        };
     }, [searchQuery, fetchUsers]);
 
     const handleClear = () => {

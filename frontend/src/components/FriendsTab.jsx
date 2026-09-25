@@ -41,7 +41,7 @@ const FriendsTab = () => {
         dispatch(setIsCalling(true));
     };
 
-    if (loading) {
+    if (loading && (!friends || friends.length === 0)) {
         return (
             <div className="flex-1 flex items-center justify-center">
                 <span className="loading loading-spinner text-primary"></span>

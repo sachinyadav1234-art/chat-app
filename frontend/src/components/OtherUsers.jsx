@@ -8,15 +8,7 @@ const OtherUsers = () => {
     useGetOtherUsers();
     const { otherUsers } = useSelector(store => store.user);
 
-    if (!otherUsers) {
-        return (
-            <div className="flex-1 flex items-center justify-center">
-                <span className="loading loading-spinner text-primary"></span>
-            </div>
-        );
-    }
-
-    if (otherUsers.length === 0) {
+    if (!otherUsers || otherUsers.length === 0) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-12 gap-3">
                 <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center">
