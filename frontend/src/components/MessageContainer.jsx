@@ -6,6 +6,7 @@ import { setSelectedUser } from '../redux/userSlice';
 import { setTargetUser, setCallType, setIsCalling } from '../redux/callSlice';
 import { IoCallOutline, IoVideocamOutline, IoArrowBackOutline } from 'react-icons/io5';
 import { HiDotsVertical } from 'react-icons/hi';
+import { getAvatarUrl } from '../utils/avatar';
 
 const MessageContainer = () => {
     const { selectedUser, authUser, onlineUsers, typingUsers } = useSelector(store => store.user);
@@ -36,10 +37,10 @@ const MessageContainer = () => {
 
                         <div className="relative">
                             <img
-                                src={selectedUser?.profilePhoto || `https://avatar.iran.liara.run/public?username=${selectedUser?.username || 'user'}`}
+                                src={getAvatarUrl(selectedUser)}
                                 alt={selectedUser?.fullName || 'User'}
-                                onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${selectedUser?.username || 'user'}`; }}
                                 className="w-10 h-10 rounded-full object-cover"
+                                loading="lazy"
                             />
                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-600'}`} />
                         </div>

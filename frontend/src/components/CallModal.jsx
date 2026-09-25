@@ -12,6 +12,7 @@ import {
 import { BsMicMuteFill, BsMicFill, BsCameraVideoOffFill, BsCameraVideoFill } from 'react-icons/bs';
 import { MdCallEnd, MdScreenShare, MdStopScreenShare } from 'react-icons/md';
 import { IoVideocamOutline, IoCallOutline } from 'react-icons/io5';
+import { getAvatarUrl } from '../utils/avatar';
 
 // ─── Web Audio Tone Synthesizer ───────────────────────────────────────
 class SoundEffectManager {
@@ -478,8 +479,9 @@ const CallModal = () => {
                 <div className="flex flex-col items-center gap-6 p-8 bg-gray-900/95 rounded-3xl shadow-2xl border border-gray-800 w-84 max-w-xs sm:max-w-sm text-center">
                     <div className="relative">
                         <img
-                            src={caller?.profilePhoto || `https://avatar.iran.liara.run/public?username=${caller?.username || 'user'}`}
+                            src={getAvatarUrl(caller?.profilePhoto, caller?.fullName || caller?.username)}
                             alt={caller?.fullName}
+                            loading="lazy"
                             className="w-24 h-24 rounded-full border-4 border-emerald-500 object-cover shadow-lg"
                         />
                         <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-2 shadow-md">
@@ -528,8 +530,9 @@ const CallModal = () => {
                     {/* Header info in call */}
                     <div className="absolute top-4 left-4 z-20 flex items-center gap-3 bg-gray-900/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-800 shadow-lg">
                         <img
-                            src={activeTarget?.profilePhoto || `https://avatar.iran.liara.run/public?username=${activeTarget?.username || 'user'}`}
+                            src={getAvatarUrl(activeTarget?.profilePhoto, activeTarget?.fullName || activeTarget?.username)}
                             alt={activeTarget?.fullName}
+                            loading="lazy"
                             className="w-8 h-8 rounded-full object-cover border border-gray-700"
                         />
                         <div>
@@ -555,8 +558,9 @@ const CallModal = () => {
                                     <div className="flex flex-col items-center gap-4">
                                         <div className="relative">
                                             <img
-                                                src={activeTarget?.profilePhoto || `https://avatar.iran.liara.run/public?username=${activeTarget?.username || 'user'}`}
+                                                src={getAvatarUrl(activeTarget?.profilePhoto, activeTarget?.fullName || activeTarget?.username)}
                                                 alt={activeTarget?.fullName}
+                                                loading="lazy"
                                                 className="w-28 h-28 rounded-full border-4 border-blue-500 object-cover shadow-2xl"
                                             />
                                             <div className="absolute inset-0 rounded-full border-4 border-blue-400 animate-ping opacity-30 pointer-events-none" />
@@ -572,8 +576,9 @@ const CallModal = () => {
                             <div className="flex flex-col items-center gap-5">
                                 <div className="relative">
                                     <img
-                                        src={activeTarget?.profilePhoto || `https://avatar.iran.liara.run/public?username=${activeTarget?.username || 'user'}`}
+                                        src={getAvatarUrl(activeTarget?.profilePhoto, activeTarget?.fullName || activeTarget?.username)}
                                         alt={activeTarget?.fullName}
+                                        loading="lazy"
                                         className="w-32 h-32 rounded-full border-4 border-emerald-500 object-cover shadow-2xl"
                                     />
                                     {callAccepted ? (

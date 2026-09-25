@@ -46,6 +46,7 @@ const router = createBrowserRouter([
 function App() {
     const { authUser, token } = useSelector(store => store.user);
     const { socket } = useSelector(store => store.socket);
+    const { isReceivingCall, isCalling, callAccepted } = useSelector(store => store.call);
     const dispatch = useDispatch();
 
     // Initial data load when logged in (Friends, Pending Requests, Other Users)
@@ -154,7 +155,7 @@ function App() {
     return (
         <div className="min-h-screen w-full bg-gray-950 flex flex-col">
             <RouterProvider router={router} />
-            {authUser && <CallModal />}
+            {authUser && (isReceivingCall || isCalling || callAccepted) && <CallModal />}
         </div>
     );
 }

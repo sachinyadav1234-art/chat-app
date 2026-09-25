@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useSelector } from "react-redux";
+import { getAvatarUrl } from '../utils/avatar';
 
 const Message = ({ message }) => {
     const scroll = useRef();
@@ -16,13 +17,15 @@ const Message = ({ message }) => {
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    const targetUser = isOwn ? authUser : selectedUser;
+
     return (
         <div ref={scroll} className={`flex items-end gap-2 mb-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
             <img
-                src={(isOwn ? authUser?.profilePhoto : selectedUser?.profilePhoto) || `https://avatar.iran.liara.run/public?username=${(isOwn ? authUser?.username : selectedUser?.username) || 'user'}`}
+                src={getAvatarUrl(targetUser)}
                 alt="avatar"
-                onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${(isOwn ? authUser?.username : selectedUser?.username) || 'user'}`; }}
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0 mb-1"
+                loading="lazy"
             />
             <div className={`flex flex-col gap-0.5 max-w-xs lg:max-w-md ${isOwn ? 'items-end' : 'items-start'}`}>
                 <div

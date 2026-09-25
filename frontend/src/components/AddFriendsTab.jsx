@@ -7,6 +7,7 @@ import { addFriend, removeFriendRequest } from '../redux/userSlice';
 import { BiSearchAlt2 } from 'react-icons/bi';
 import { IoPersonAddOutline, IoCloseCircleOutline, IoSparklesOutline, IoCheckmark } from 'react-icons/io5';
 import { FiClock, FiUsers } from 'react-icons/fi';
+import { getAvatarUrl } from '../utils/avatar';
 
 const AddFriendsTab = () => {
     const dispatch = useDispatch();
@@ -236,9 +237,9 @@ const AddFriendsTab = () => {
                         className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
                     >
                         <img
-                            src={user.profilePhoto || `https://avatar.iran.liara.run/public?username=${user.username || 'user'}`}
+                            src={getAvatarUrl(user.profilePhoto, user.fullName || user.username)}
                             alt={user.fullName || 'User'}
-                            onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${user.username || 'user'}`; }}
+                            loading="lazy"
                             className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700"
                         />
                         <div className="flex-1 min-w-0">

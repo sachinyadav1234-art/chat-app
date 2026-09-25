@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from "react-redux";
 import { setSelectedUser } from '../redux/userSlice';
+import { getAvatarUrl } from '../utils/avatar';
 
 const OtherUser = ({ user }) => {
     const dispatch = useDispatch();
@@ -17,10 +18,10 @@ const OtherUser = ({ user }) => {
         >
             <div className="relative flex-shrink-0">
                 <img
-                    src={user?.profilePhoto || `https://avatar.iran.liara.run/public?username=${user?.username || 'user'}`}
+                    src={getAvatarUrl(user)}
                     alt={user?.fullName || 'User'}
-                    onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${user?.username || 'user'}`; }}
                     className="w-11 h-11 rounded-full object-cover"
+                    loading="lazy"
                 />
                 <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-600'}`} />
             </div>

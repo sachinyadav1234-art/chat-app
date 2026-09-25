@@ -6,6 +6,7 @@ import { setTargetUser, setCallType, setIsCalling } from '../redux/callSlice';
 import { BASE_URL } from '..';
 import { IoCallOutline, IoChatbubbleOutline, IoPeopleOutline } from 'react-icons/io5';
 import { BsCameraVideoFill } from 'react-icons/bs';
+import { getAvatarUrl } from '../utils/avatar';
 
 const FriendsTab = () => {
     const dispatch = useDispatch();
@@ -75,10 +76,10 @@ const FriendsTab = () => {
                     >
                         <div className="relative flex-shrink-0">
                             <img
-                                src={friend.profilePhoto || `https://avatar.iran.liara.run/public?username=${friend.username || 'user'}`}
+                                src={getAvatarUrl(friend)}
                                 alt={friend.fullName || 'Friend'}
-                                onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${friend.username || 'user'}`; }}
                                 className="w-11 h-11 rounded-full object-cover border border-gray-700"
+                                loading="lazy"
                             />
                             <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
                         </div>

@@ -11,6 +11,7 @@ import FriendsTab from './FriendsTab';
 import FriendRequestsTab from './FriendRequestsTab';
 import AddFriendsTab from './AddFriendsTab';
 import ProfileEditModal from './ProfileEditModal';
+import { getAvatarUrl } from '../utils/avatar';
 import {
     IoChatbubblesOutline,
     IoPersonAddOutline,
@@ -72,10 +73,10 @@ const Sidebar = () => {
                         title="Edit Profile"
                     >
                         <img
-                            src={authUser?.profilePhoto || `https://avatar.iran.liara.run/public?username=${authUser?.username || 'user'}`}
+                            src={getAvatarUrl(authUser)}
                             alt={authUser?.fullName || 'User'}
-                            onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${authUser?.username || 'user'}`; }}
                             className="w-11 h-11 rounded-full object-cover border-2 border-transparent group-hover:border-blue-500 transition-all"
+                            loading="lazy"
                         />
                         {/* Camera overlay */}
                         <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all">

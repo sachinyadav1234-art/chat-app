@@ -7,6 +7,8 @@ import { BASE_URL } from '..';
 import { FiCheck, FiX } from 'react-icons/fi';
 import { IoMailOpenOutline } from 'react-icons/io5';
 
+import { getAvatarUrl } from '../utils/avatar';
+
 const FriendRequestsTab = () => {
     const dispatch = useDispatch();
     const { friendRequests, token } = useSelector(store => store.user);
@@ -104,9 +106,9 @@ const FriendRequestsTab = () => {
                         className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
                     >
                         <img
-                            src={sender.profilePhoto || `https://avatar.iran.liara.run/public?username=${sender.username || 'user'}`}
+                            src={getAvatarUrl(sender.profilePhoto, sender.fullName || sender.username)}
                             alt={sender.fullName || "User"}
-                            onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${sender.username || 'user'}`; }}
+                            loading="lazy"
                             className="w-11 h-11 rounded-full flex-shrink-0 object-cover border border-gray-700"
                         />
                         <div className="flex-1 min-w-0">

@@ -45,8 +45,9 @@ export const register = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-        const maleProfilePhoto = `https://avatar.iran.liara.run/public/boy?username=${cleanUsername}`;
-        const femaleProfilePhoto = `https://avatar.iran.liara.run/public/girl?username=${cleanUsername}`;
+        const encodedName = encodeURIComponent(String(fullName).trim());
+        const maleProfilePhoto = `https://ui-avatars.com/api/?name=${encodedName}&background=2563eb&color=fff&bold=true&size=128`;
+        const femaleProfilePhoto = `https://ui-avatars.com/api/?name=${encodedName}&background=ec4899&color=fff&bold=true&size=128`;
 
         const newUser = await User.create({
             fullName: String(fullName).trim(),
