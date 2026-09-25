@@ -11,8 +11,8 @@ dotenv.config({});
 const PORT = process.env.PORT || 5000;
 
 // middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use(cookieParser());
 
 const allowedOrigins = [

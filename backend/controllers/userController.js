@@ -156,31 +156,42 @@ export const searchUsers = async (req, res) => {
             users = await User.find({
                 _id: { $ne: loggedInUserId },
                 $or: [{ fullName: regex }, { username: regex }]
-            }).select("-password -friendRequests").limit(20);
+            }).select("-password").limit(30);
         } else {
             // Suggestions: return recent/suggested users if no query provided
             users = await User.find({
                 _id: { $ne: loggedInUserId }
-            }).select("-password -friendRequests").sort({ createdAt: -1 }).limit(15);
+            }).select("-password").sort({ createdAt: -1 }).limit(20);
         }
 
         const me = await User.findById(loggedInUserId).select("friends friendRequests");
         const myFriendIds = me?.friends?.map(f => f.toString()) || [];
-        const myRequests = me?.friendRequests || [];
+        const myIncomingRequests = me?.friendRequests || [];
 
         const result = users.map(u => {
             const uId = u._id.toString();
             const isFriend = myFriendIds.includes(uId);
-            const receivedRequest = myRequests.find(
+
+            // Did this user send ME a pending request?
+            const receivedRequest = myIncomingRequests.find(
                 r => r.sender && r.sender.toString() === uId && r.status === "pending"
+            );
+
+            // Did I send THIS USER a pending request?
+            const sentRequest = u.friendRequests?.find(
+                r => r.sender && r.sender.toString() === loggedInUserId.toString() && r.status === "pending"
             );
 
             let friendStatus = "none";
             if (isFriend) friendStatus = "friends";
+            else if (sentRequest) friendStatus = "pending";
             else if (receivedRequest) friendStatus = "received";
 
+            const userObj = u.toObject();
+            delete userObj.friendRequests;
+
             return {
-                ...u.toObject(),
+                ...userObj,
                 friendStatus
             };
         });
@@ -234,10 +245,48 @@ export const sendFriendRequest = async (req, res) => {
             return res.status(404).json({ message: "User not found", success: false });
         }
 
+        // 1. Check if already friends
         if (sender.friends.map(f => f.toString()).includes(receiverId)) {
-            return res.status(400).json({ message: "Already friends", success: false });
+            return res.status(400).json({ message: "Already friends with this user", success: false });
         }
 
+        // 2. Check if receiver already sent a request to sender (cross-request -> auto-accept!)
+        const incomingFromReceiver = sender.friendRequests.find(
+            r => r.sender && r.sender.toString() === receiverId && r.status === "pending"
+        );
+        if (incomingFromReceiver) {
+            incomingFromReceiver.status = "accepted";
+            if (!sender.friends.map(f => f.toString()).includes(receiverId)) sender.friends.push(receiverId);
+            if (!receiver.friends.map(f => f.toString()).includes(senderId)) receiver.friends.push(senderId);
+            await sender.save();
+            await receiver.save();
+
+            const receiverSocketId = getReceiverSocketId(receiverId);
+            if (receiverSocketId) {
+                io.to(receiverId).emit("friendRequestAccepted", {
+                    _id: sender._id,
+                    fullName: sender.fullName,
+                    username: sender.username,
+                    profilePhoto: sender.profilePhoto,
+                    bio: sender.bio || ""
+                });
+            }
+
+            return res.status(200).json({
+                message: "You are now friends!",
+                success: true,
+                autoAccepted: true,
+                friend: {
+                    _id: receiver._id,
+                    fullName: receiver.fullName,
+                    username: receiver.username,
+                    profilePhoto: receiver.profilePhoto,
+                    bio: receiver.bio || ""
+                }
+            });
+        }
+
+        // 3. Check if request is already pending
         const existing = receiver.friendRequests.find(
             r => r.sender && r.sender.toString() === senderId && r.status === "pending"
         );
@@ -245,18 +294,21 @@ export const sendFriendRequest = async (req, res) => {
             return res.status(400).json({ message: "Friend request already sent", success: false });
         }
 
+        // 4. Remove any previous non-pending request and push fresh pending request
+        receiver.friendRequests = receiver.friendRequests.filter(
+            r => !(r.sender && r.sender.toString() === senderId)
+        );
         receiver.friendRequests.push({ sender: senderId, status: "pending" });
         await receiver.save();
 
-        const receiverSocketId = getReceiverSocketId(receiverId);
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit("newFriendRequest", {
-                _id: sender._id,
-                fullName: sender.fullName,
-                username: sender.username,
-                profilePhoto: sender.profilePhoto,
-            });
-        }
+        // 5. Real-time notification to receiver
+        io.to(receiverId).emit("newFriendRequest", {
+            _id: sender._id,
+            fullName: sender.fullName,
+            username: sender.username,
+            profilePhoto: sender.profilePhoto,
+            bio: sender.bio || ""
+        });
 
         return res.status(200).json({ message: "Friend request sent successfully", success: true });
     } catch (error) {
@@ -281,6 +333,20 @@ export const acceptFriendRequest = async (req, res) => {
         );
 
         if (requestIndex === -1) {
+            // Check if already friends
+            if (me.friends.map(f => f.toString()).includes(senderId)) {
+                return res.status(200).json({
+                    message: "Already friends",
+                    success: true,
+                    friend: {
+                        _id: sender._id,
+                        fullName: sender.fullName,
+                        username: sender.username,
+                        profilePhoto: sender.profilePhoto,
+                        bio: sender.bio || ""
+                    }
+                });
+            }
             return res.status(400).json({ message: "No pending friend request found", success: false });
         }
 
@@ -288,20 +354,36 @@ export const acceptFriendRequest = async (req, res) => {
         if (!me.friends.map(f => f.toString()).includes(senderId)) me.friends.push(senderId);
         if (!sender.friends.map(f => f.toString()).includes(loggedInUserId)) sender.friends.push(loggedInUserId);
 
+        // Also resolve reciprocal request if any
+        sender.friendRequests.forEach(r => {
+            if (r.sender && r.sender.toString() === loggedInUserId) {
+                r.status = "accepted";
+            }
+        });
+
         await me.save();
         await sender.save();
 
-        const senderSocketId = getReceiverSocketId(senderId);
-        if (senderSocketId) {
-            io.to(senderSocketId).emit("friendRequestAccepted", {
-                _id: me._id,
-                fullName: me.fullName,
-                username: me.username,
-                profilePhoto: me.profilePhoto,
-            });
-        }
+        // Emit real-time notification to the sender who requested
+        io.to(senderId).emit("friendRequestAccepted", {
+            _id: me._id,
+            fullName: me.fullName,
+            username: me.username,
+            profilePhoto: me.profilePhoto,
+            bio: me.bio || ""
+        });
 
-        return res.status(200).json({ message: "Friend request accepted", success: true });
+        return res.status(200).json({
+            message: "Friend request accepted",
+            success: true,
+            friend: {
+                _id: sender._id,
+                fullName: sender.fullName,
+                username: sender.username,
+                profilePhoto: sender.profilePhoto,
+                bio: sender.bio || ""
+            }
+        });
     } catch (error) {
         console.error("Accept Friend Request Error:", error);
         return res.status(500).json({ message: "Internal server error", success: false });
@@ -341,7 +423,10 @@ export const updateProfile = async (req, res) => {
         let profilePhoto;
 
         if (req.file) {
-            const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY;
+            const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME && 
+                                  process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+                                  process.env.CLOUDINARY_API_KEY && 
+                                  process.env.CLOUDINARY_API_KEY !== "your_api_key";
             if (hasCloudinary) {
                 const uploadResult = await new Promise((resolve, reject) => {
                     const stream = cloudinary.uploader.upload_stream(
@@ -377,15 +462,12 @@ export const updateProfile = async (req, res) => {
         // Real-time socket broadcast to online friends
         const userWithFriends = await User.findById(userId).select("friends");
         userWithFriends?.friends?.forEach(friendId => {
-            const socketId = getReceiverSocketId(friendId.toString());
-            if (socketId) {
-                io.to(socketId).emit("profileUpdated", {
-                    userId,
-                    profilePhoto: updatedUser.profilePhoto,
-                    fullName: updatedUser.fullName,
-                    bio: updatedUser.bio,
-                });
-            }
+            io.to(friendId.toString()).emit("profileUpdated", {
+                userId,
+                profilePhoto: updatedUser.profilePhoto,
+                fullName: updatedUser.fullName,
+                bio: updatedUser.bio,
+            });
         });
 
         return res.status(200).json({

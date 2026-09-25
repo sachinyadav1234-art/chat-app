@@ -32,7 +32,7 @@ const FriendRequestsTab = () => {
 
     const acceptRequest = async (senderId) => {
         try {
-            await axios.post(
+            const res = await axios.post(
                 `${BASE_URL}/api/v1/user/friend-request/accept/${senderId}`,
                 {},
                 {
@@ -40,8 +40,12 @@ const FriendRequestsTab = () => {
                     withCredentials: true
                 }
             );
-            const accepted = friendRequests.find(r => (r.sender?._id || r.sender) === senderId);
-            if (accepted && accepted.sender) dispatch(addFriend(accepted.sender));
+            if (res.data?.friend) {
+                dispatch(addFriend(res.data.friend));
+            } else {
+                const accepted = friendRequests.find(r => (r.sender?._id || r.sender) === senderId);
+                if (accepted && accepted.sender) dispatch(addFriend(accepted.sender));
+            }
             dispatch(removeFriendRequest(senderId));
             toast.success("Friend request accepted! 🎉");
         } catch (err) {
@@ -100,8 +104,9 @@ const FriendRequestsTab = () => {
                         className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
                     >
                         <img
-                            src={sender.profilePhoto || `https://avatar.iran.liara.run/public?username=${sender.username}`}
+                            src={sender.profilePhoto || `https://avatar.iran.liara.run/public?username=${sender.username || 'user'}`}
                             alt={sender.fullName || "User"}
+                            onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${sender.username || 'user'}`; }}
                             className="w-11 h-11 rounded-full flex-shrink-0 object-cover border border-gray-700"
                         />
                         <div className="flex-1 min-w-0">

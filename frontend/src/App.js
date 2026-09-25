@@ -6,8 +6,19 @@ import Login from './components/Login';
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from "react-redux";
 import io from "socket.io-client";
+import axios from "axios";
+import toast from "react-hot-toast";
 import { setSocket } from './redux/socketSlice';
-import { setOnlineUsers, addFriendRequest, addFriend, setTypingUser } from './redux/userSlice';
+import {
+    setOnlineUsers,
+    addFriendRequest,
+    addFriend,
+    setTypingUser,
+    updateUserProfile,
+    setFriends,
+    setFriendRequests,
+    setOtherUsers
+} from './redux/userSlice';
 import {
     setReceivingCall,
     setCaller,
@@ -33,14 +44,48 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-    const { authUser } = useSelector(store => store.user);
+    const { authUser, token } = useSelector(store => store.user);
     const { socket } = useSelector(store => store.socket);
     const dispatch = useDispatch();
 
+    // Initial data load when logged in (Friends, Pending Requests, Other Users)
+    useEffect(() => {
+        if (!authUser) return;
+
+        const fetchInitialData = async () => {
+            const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+            try {
+                const [friendsRes, requestsRes, othersRes] = await Promise.allSettled([
+                    axios.get(`${BASE_URL}/api/v1/user/friends`, { headers: authHeader, withCredentials: true }),
+                    axios.get(`${BASE_URL}/api/v1/user/friend-requests`, { headers: authHeader, withCredentials: true }),
+                    axios.get(`${BASE_URL}/api/v1/user`, { headers: authHeader, withCredentials: true }),
+                ]);
+
+                if (friendsRes.status === "fulfilled" && Array.isArray(friendsRes.value.data)) {
+                    dispatch(setFriends(friendsRes.value.data));
+                }
+                if (requestsRes.status === "fulfilled" && Array.isArray(requestsRes.value.data?.incoming)) {
+                    dispatch(setFriendRequests(requestsRes.value.data.incoming));
+                }
+                if (othersRes.status === "fulfilled" && Array.isArray(othersRes.value.data)) {
+                    dispatch(setOtherUsers(othersRes.value.data));
+                }
+            } catch (err) {
+                console.error("Initial data load error:", err);
+            }
+        };
+
+        fetchInitialData();
+    }, [authUser?._id, token, dispatch]);
+
+    // Socket Connection & Event Listeners
     useEffect(() => {
         if (authUser) {
             const socketio = io(`${BASE_URL}`, {
-                query: { userId: authUser._id }
+                query: { userId: authUser._id },
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000,
             });
             dispatch(setSocket(socketio));
 
@@ -57,12 +102,26 @@ function App() {
                 dispatch(setTypingUser({ userId: from, isTyping: false }));
             });
 
-            // Friend request notifications
+            // Friend request received
             socketio.on('newFriendRequest', (sender) => {
                 dispatch(addFriendRequest({ sender, _id: sender._id }));
+                toast((t) => (
+                    <div className="flex items-center gap-2">
+                        <span>👋</span>
+                        <span><strong>{sender.fullName || 'Someone'}</strong> sent you a friend request!</span>
+                    </div>
+                ), { duration: 4500 });
             });
+
+            // Friend request accepted
             socketio.on('friendRequestAccepted', (newFriend) => {
                 dispatch(addFriend(newFriend));
+                toast.success(`${newFriend.fullName || 'User'} accepted your friend request! 🎉`, { duration: 4500 });
+            });
+
+            // Profile updated broadcast
+            socketio.on('profileUpdated', (data) => {
+                dispatch(updateUserProfile(data));
             });
 
             // WebRTC — incoming call
@@ -79,6 +138,7 @@ function App() {
                 socketio.off('stopTyping');
                 socketio.off('newFriendRequest');
                 socketio.off('friendRequestAccepted');
+                socketio.off('profileUpdated');
                 socketio.off('incomingCall');
                 socketio.close();
             };
@@ -88,7 +148,7 @@ function App() {
                 dispatch(setSocket(null));
             }
         }
-    }, [authUser]);
+    }, [authUser?._id]);
 
     return (
         <div className="min-h-screen w-full bg-gray-950 flex flex-col">

@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { BASE_URL } from '..';
+import { addFriend, removeFriendRequest } from '../redux/userSlice';
 import { BiSearchAlt2 } from 'react-icons/bi';
-import { IoPersonAddOutline, IoCloseCircleOutline, IoSparklesOutline } from 'react-icons/io5';
-import { FiCheck, FiClock, FiUsers } from 'react-icons/fi';
+import { IoPersonAddOutline, IoCloseCircleOutline, IoSparklesOutline, IoCheckmark } from 'react-icons/io5';
+import { FiClock, FiUsers } from 'react-icons/fi';
 
 const AddFriendsTab = () => {
+    const dispatch = useDispatch();
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState([]);
     const [searching, setSearching] = useState(false);
-    const [sentRequests, setSentRequests] = useState({});
-    const { friends, token } = useSelector(store => store.user);
+    const [actionLoading, setActionLoading] = useState({});
+    const { friends, friendRequests, token } = useSelector(store => store.user);
 
     // Fetch suggestions or search query
     const fetchUsers = useCallback(async (queryText) => {
@@ -29,7 +31,6 @@ const AddFriendsTab = () => {
             setResults(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error("Fetch users error:", err);
-            // Don't show toast on empty initial load to avoid noise
             if (queryText) {
                 toast.error("Could not complete search");
             }
@@ -58,8 +59,9 @@ const AddFriendsTab = () => {
     };
 
     const sendRequest = async (userId) => {
+        setActionLoading(prev => ({ ...prev, [userId]: true }));
         try {
-            await axios.post(
+            const res = await axios.post(
                 `${BASE_URL}/api/v1/user/friend-request/send/${userId}`,
                 {},
                 {
@@ -67,42 +69,106 @@ const AddFriendsTab = () => {
                     withCredentials: true
                 }
             );
-            setSentRequests(prev => ({ ...prev, [userId]: true }));
-            toast.success("Friend request sent! ✉️");
+
+            if (res.data?.autoAccepted) {
+                const targetUser = results.find(u => u._id === userId);
+                if (targetUser) dispatch(addFriend(targetUser));
+                setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'friends' } : u));
+                toast.success("You are now friends! 🎉");
+            } else {
+                setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'pending' } : u));
+                toast.success("Friend request sent! ✉️");
+            }
         } catch (err) {
             toast.error(err.response?.data?.message || "Failed to send request");
+        } finally {
+            setActionLoading(prev => ({ ...prev, [userId]: false }));
+        }
+    };
+
+    const acceptRequest = async (userId) => {
+        setActionLoading(prev => ({ ...prev, [userId]: true }));
+        try {
+            const res = await axios.post(
+                `${BASE_URL}/api/v1/user/friend-request/accept/${userId}`,
+                {},
+                {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    withCredentials: true
+                }
+            );
+
+            const targetUser = results.find(u => u._id === userId);
+            if (res.data?.friend) {
+                dispatch(addFriend(res.data.friend));
+            } else if (targetUser) {
+                dispatch(addFriend(targetUser));
+            }
+            dispatch(removeFriendRequest(userId));
+            setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'friends' } : u));
+            toast.success("Friend request accepted! 🎉");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to accept request");
+        } finally {
+            setActionLoading(prev => ({ ...prev, [userId]: false }));
         }
     };
 
     const getStatusButton = (user) => {
-        const isFriend = friends?.find(f => (f._id || f) === user._id);
+        const uId = user._id?.toString();
+        const isFriend = friends?.some(f => (f._id || f)?.toString() === uId) || user.friendStatus === 'friends';
         if (isFriend) {
             return (
-                <div className="flex items-center gap-1 text-green-500 text-xs font-medium px-3 py-1.5 bg-green-500 bg-opacity-10 rounded-full border border-green-500 border-opacity-20">
+                <div className="flex items-center gap-1 text-green-500 text-xs font-medium px-3 py-1.5 bg-green-500/10 rounded-full border border-green-500/20">
                     <FiUsers className="w-3 h-3" /> Friends
                 </div>
             );
         }
-        if (user.friendStatus === 'pending' || sentRequests[user._id]) {
+
+        const hasIncomingRequest = friendRequests?.some(
+            r => (r.sender?._id || r.sender)?.toString() === uId
+        ) || user.friendStatus === 'received';
+
+        if (hasIncomingRequest) {
             return (
-                <div className="flex items-center gap-1 text-yellow-500 text-xs font-medium px-3 py-1.5 bg-yellow-500 bg-opacity-10 rounded-full border border-yellow-500 border-opacity-20">
-                    <FiClock className="w-3 h-3" /> Pending
+                <button
+                    onClick={() => acceptRequest(user._id)}
+                    disabled={actionLoading[user._id]}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-full transition-all shadow-sm"
+                    title="Accept Friend Request"
+                >
+                    {actionLoading[user._id] ? (
+                        <span className="loading loading-spinner loading-xs"></span>
+                    ) : (
+                        <>
+                            <IoCheckmark className="w-3.5 h-3.5" /> Accept
+                        </>
+                    )}
+                </button>
+            );
+        }
+
+        if (user.friendStatus === 'pending') {
+            return (
+                <div className="flex items-center gap-1 text-yellow-400 text-xs font-medium px-3 py-1.5 bg-yellow-400/10 rounded-full border border-yellow-400/20">
+                    <FiClock className="w-3 h-3" /> Requested
                 </div>
             );
         }
-        if (user.friendStatus === 'received') {
-            return (
-                <div className="flex items-center gap-1 text-blue-400 text-xs font-medium px-3 py-1.5 bg-blue-400 bg-opacity-10 rounded-full border border-blue-400 border-opacity-20">
-                    <FiCheck className="w-3 h-3" /> Sent request
-                </div>
-            );
-        }
+
         return (
             <button
                 onClick={() => sendRequest(user._id)}
-                className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full transition-all shadow-sm"
+                disabled={actionLoading[user._id]}
+                className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full transition-all shadow-sm disabled:opacity-50"
             >
-                <IoPersonAddOutline className="w-3.5 h-3.5" /> Add
+                {actionLoading[user._id] ? (
+                    <span className="loading loading-spinner loading-xs"></span>
+                ) : (
+                    <>
+                        <IoPersonAddOutline className="w-3.5 h-3.5" /> Add
+                    </>
+                )}
             </button>
         );
     };
@@ -169,8 +235,9 @@ const AddFriendsTab = () => {
                         className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
                     >
                         <img
-                            src={user.profilePhoto || `https://avatar.iran.liara.run/public?username=${user.username}`}
-                            alt={user.fullName}
+                            src={user.profilePhoto || `https://avatar.iran.liara.run/public?username=${user.username || 'user'}`}
+                            alt={user.fullName || 'User'}
+                            onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${user.username || 'user'}`; }}
                             className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700"
                         />
                         <div className="flex-1 min-w-0">

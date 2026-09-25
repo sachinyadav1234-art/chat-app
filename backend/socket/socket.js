@@ -33,40 +33,42 @@ const io = new Server(server, {
     },
 });
 
-export const getReceiverSocketId = (receiverId) => {
-    return userSocketMap[receiverId];
-};
+const userSocketMap = {}; // { userId -> Set of socketId }
 
-const userSocketMap = {}; // { userId -> socketId }
+export const getReceiverSocketId = (receiverId) => {
+    if (!userSocketMap[receiverId]) return null;
+    return Array.from(userSocketMap[receiverId])[0];
+};
 
 io.on('connection', (socket) => {
     const userId = socket.handshake.query.userId;
-    if (userId !== undefined) {
-        userSocketMap[userId] = socket.id;
+    if (userId && userId !== "undefined" && userId !== "null") {
+        socket.join(userId);
+        if (!userSocketMap[userId]) {
+            userSocketMap[userId] = new Set();
+        }
+        userSocketMap[userId].add(socket.id);
     }
 
     io.emit('getOnlineUsers', Object.keys(userSocketMap));
 
     // ─── Typing Indicators ───────────────────────────────────────
     socket.on('typing', ({ to }) => {
-        const receiverSocketId = userSocketMap[to];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('typing', { from: userId });
+        if (to) {
+            io.to(to).emit('typing', { from: userId });
         }
     });
 
     socket.on('stopTyping', ({ to }) => {
-        const receiverSocketId = userSocketMap[to];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('stopTyping', { from: userId });
+        if (to) {
+            io.to(to).emit('stopTyping', { from: userId });
         }
     });
 
     // ─── WebRTC Signaling ─────────────────────────────────────────
     socket.on('callUser', ({ userToCall, signalData, from, fromUser, callType }) => {
-        const receiverSocketId = userSocketMap[userToCall];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('incomingCall', {
+        if (userSocketMap[userToCall] && userSocketMap[userToCall].size > 0) {
+            io.to(userToCall).emit('incomingCall', {
                 signal: signalData,
                 from,
                 fromUser,
@@ -78,38 +80,40 @@ io.on('connection', (socket) => {
     });
 
     socket.on('answerCall', ({ to, signal }) => {
-        const callerSocketId = userSocketMap[to];
-        if (callerSocketId) {
-            io.to(callerSocketId).emit('callAccepted', signal);
+        if (to) {
+            io.to(to).emit('callAccepted', signal);
         }
     });
 
     socket.on('rejectCall', ({ to }) => {
-        const callerSocketId = userSocketMap[to];
-        if (callerSocketId) {
-            io.to(callerSocketId).emit('callRejected', { reason: 'Call declined' });
+        if (to) {
+            io.to(to).emit('callRejected', { reason: 'Call declined' });
         }
     });
 
     socket.on('endCall', ({ to }) => {
-        const receiverSocketId = userSocketMap[to];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('callEnded');
+        if (to) {
+            io.to(to).emit('callEnded');
         }
     });
 
     socket.on('iceCandidate', ({ to, candidate }) => {
-        const receiverSocketId = userSocketMap[to];
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('iceCandidate', { candidate });
+        if (to) {
+            io.to(to).emit('iceCandidate', { candidate });
         }
     });
 
     // ─── Disconnect ───────────────────────────────────────────────
     socket.on('disconnect', () => {
-        delete userSocketMap[userId];
+        if (userId && userSocketMap[userId]) {
+            userSocketMap[userId].delete(socket.id);
+            if (userSocketMap[userId].size === 0) {
+                delete userSocketMap[userId];
+            }
+        }
         io.emit('getOnlineUsers', Object.keys(userSocketMap));
     });
 });
 
 export { app, io, server };
+

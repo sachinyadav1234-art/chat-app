@@ -13,14 +13,12 @@ import {
     REGISTER,
 } from 'redux-persist';
 
-// ─── Use sessionStorage so each browser TAB has its OWN session ───
-// This allows logging in as different users in different tabs.
-import storageSession from 'redux-persist/lib/storage/session';
+import storage from 'redux-persist/lib/storage';
 
 const persistConfig = {
     key: 'root',
     version: 1,
-    storage: storageSession,   // <-- sessionStorage (per-tab) instead of localStorage (shared)
+    storage: storage,
     whitelist: ['user'],       // only persist user auth state
 };
 

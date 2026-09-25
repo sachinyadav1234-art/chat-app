@@ -36,8 +36,9 @@ const MessageContainer = () => {
 
                         <div className="relative">
                             <img
-                                src={selectedUser?.profilePhoto}
-                                alt={selectedUser?.fullName}
+                                src={selectedUser?.profilePhoto || `https://avatar.iran.liara.run/public?username=${selectedUser?.username || 'user'}`}
+                                alt={selectedUser?.fullName || 'User'}
+                                onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${selectedUser?.username || 'user'}`; }}
                                 className="w-10 h-10 rounded-full object-cover"
                             />
                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-600'}`} />

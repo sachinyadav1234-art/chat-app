@@ -16,11 +16,22 @@ const userSlice = createSlice({
     },
     reducers: {
         setAuthUser: (state, action) => {
-            state.authUser = action.payload;
-            if (action.payload?.token) {
-                state.token = action.payload.token;
-            } else if (action.payload === null) {
+            if (action.payload === null) {
+                state.authUser = null;
                 state.token = null;
+                state.otherUsers = null;
+                state.selectedUser = null;
+                state.onlineUsers = [];
+                state.friends = [];
+                state.friendRequests = [];
+                state.searchResultUsers = [];
+                state.friendRequestBadge = 0;
+                state.typingUsers = {};
+            } else {
+                state.authUser = action.payload;
+                if (action.payload.token) {
+                    state.token = action.payload.token;
+                }
             }
         },
         setToken: (state, action) => {
@@ -33,32 +44,87 @@ const userSlice = createSlice({
             state.selectedUser = action.payload;
         },
         setOnlineUsers: (state, action) => {
-            state.onlineUsers = action.payload;
+            state.onlineUsers = action.payload || [];
         },
         setFriends: (state, action) => {
-            state.friends = action.payload;
+            state.friends = action.payload || [];
         },
         setFriendRequests: (state, action) => {
             state.friendRequests = action.payload || [];
             state.friendRequestBadge = (action.payload || []).length;
         },
         addFriendRequest: (state, action) => {
-            state.friendRequests.push(action.payload);
-            state.friendRequestBadge = state.friendRequests.length;
+            const newReq = action.payload;
+            if (!newReq) return;
+            const senderId = (newReq.sender?._id || newReq.sender || newReq._id)?.toString();
+            if (!state.friendRequests) state.friendRequests = [];
+            const exists = state.friendRequests.some(
+                r => (r.sender?._id || r.sender || r._id)?.toString() === senderId
+            );
+            if (!exists) {
+                state.friendRequests.unshift(newReq);
+                state.friendRequestBadge = state.friendRequests.length;
+            }
         },
         removeFriendRequest: (state, action) => {
+            const targetId = action.payload?.toString();
+            if (!targetId || !state.friendRequests) return;
             state.friendRequests = state.friendRequests.filter(
-                r => (r.sender?._id || r.sender) !== action.payload
+                r => (r.sender?._id?.toString() || r.sender?.toString() || r._id?.toString()) !== targetId
             );
             state.friendRequestBadge = state.friendRequests.length;
         },
         addFriend: (state, action) => {
-            if (!state.friends.find(f => f._id === action.payload._id)) {
-                state.friends.push(action.payload);
+            const newFriend = action.payload;
+            if (!newFriend) return;
+            if (!state.friends) state.friends = [];
+            const friendId = (newFriend._id || newFriend)?.toString();
+            const exists = state.friends.some(f => (f._id || f)?.toString() === friendId);
+            if (!exists) {
+                state.friends.unshift(newFriend);
+            }
+        },
+        updateUserProfile: (state, action) => {
+            const { userId, profilePhoto, fullName, bio } = action.payload;
+            if (!userId) return;
+            const uId = userId.toString();
+
+            if (state.authUser && state.authUser._id?.toString() === uId) {
+                state.authUser = {
+                    ...state.authUser,
+                    ...(profilePhoto && { profilePhoto }),
+                    ...(fullName && { fullName }),
+                    ...(bio !== undefined && { bio })
+                };
+            }
+
+            if (state.friends) {
+                state.friends = state.friends.map(f =>
+                    (f._id?.toString() === uId)
+                        ? { ...f, ...(profilePhoto && { profilePhoto }), ...(fullName && { fullName }), ...(bio !== undefined && { bio }) }
+                        : f
+                );
+            }
+
+            if (state.otherUsers) {
+                state.otherUsers = state.otherUsers.map(u =>
+                    (u._id?.toString() === uId)
+                        ? { ...u, ...(profilePhoto && { profilePhoto }), ...(fullName && { fullName }), ...(bio !== undefined && { bio }) }
+                        : u
+                );
+            }
+
+            if (state.selectedUser && state.selectedUser._id?.toString() === uId) {
+                state.selectedUser = {
+                    ...state.selectedUser,
+                    ...(profilePhoto && { profilePhoto }),
+                    ...(fullName && { fullName }),
+                    ...(bio !== undefined && { bio })
+                };
             }
         },
         setSearchResultUsers: (state, action) => {
-            state.searchResultUsers = action.payload;
+            state.searchResultUsers = action.payload || [];
         },
         setTypingUser: (state, action) => {
             const { userId, isTyping } = action.payload;
@@ -78,6 +144,7 @@ export const {
     addFriendRequest,
     removeFriendRequest,
     addFriend,
+    updateUserProfile,
     setSearchResultUsers,
     setTypingUser,
 } = userSlice.actions;

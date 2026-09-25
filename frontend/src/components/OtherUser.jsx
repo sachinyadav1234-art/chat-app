@@ -17,8 +17,9 @@ const OtherUser = ({ user }) => {
         >
             <div className="relative flex-shrink-0">
                 <img
-                    src={user?.profilePhoto}
-                    alt={user?.fullName}
+                    src={user?.profilePhoto || `https://avatar.iran.liara.run/public?username=${user?.username || 'user'}`}
+                    alt={user?.fullName || 'User'}
+                    onError={(e) => { e.target.src = `https://avatar.iran.liara.run/public?username=${user?.username || 'user'}`; }}
                     className="w-11 h-11 rounded-full object-cover"
                 />
                 <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-600'}`} />
