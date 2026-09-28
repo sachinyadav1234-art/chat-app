@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 
 const useGetRealTimeMessage = () => {
     const { socket } = useSelector(store => store.socket);
-    const { selectedUser, otherUsers, friends } = useSelector(store => store.user);
+    const { authUser, selectedUser, otherUsers, friends } = useSelector(store => store.user);
     const dispatch = useDispatch();
 
     useEffect(() => {
@@ -14,16 +14,17 @@ const useGetRealTimeMessage = () => {
         const handleNewMessage = (newMessage) => {
             if (!newMessage) return;
 
-            const selectedId = selectedUser?._id?.toString();
+            const selectedId = (selectedUser?._id || selectedUser?.id)?.toString();
             const senderId = (newMessage.senderId?._id || newMessage.senderId)?.toString();
             const receiverId = (newMessage.receiverId?._id || newMessage.receiverId)?.toString();
+            const authId = (authUser?._id || authUser?.id)?.toString();
 
-            const isCurrentChat = selectedId && (senderId === selectedId || receiverId === selectedId);
+            const isCurrentChat = Boolean(selectedId && (senderId === selectedId || receiverId === selectedId));
 
             if (isCurrentChat) {
                 dispatch(addMessage(newMessage));
-            } else {
-                // Message from someone else: Show notification toast
+            } else if (senderId && authId && senderId !== authId) {
+                // Message from someone else in background: Show notification toast
                 const senderObj = (friends || []).find(f => (f._id || f)?.toString() === senderId) ||
                                   (otherUsers || []).find(u => (u._id || u)?.toString() === senderId);
                 const senderName = senderObj?.fullName || "Someone";
@@ -38,7 +39,7 @@ const useGetRealTimeMessage = () => {
         return () => {
             socket.off("newMessage", handleNewMessage);
         };
-    }, [socket, selectedUser, friends, otherUsers, dispatch]);
+    }, [socket, authUser, selectedUser, friends, otherUsers, dispatch]);
 };
 
 export default useGetRealTimeMessage;

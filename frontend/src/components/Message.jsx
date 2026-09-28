@@ -5,7 +5,10 @@ import { getAvatarUrl } from '../utils/avatar';
 const Message = ({ message }) => {
     const scroll = useRef();
     const { authUser, selectedUser } = useSelector(store => store.user);
-    const isOwn = message?.senderId === authUser?._id;
+    
+    const senderIdStr = (message?.senderId?._id || message?.senderId)?.toString();
+    const authIdStr = (authUser?._id || authUser?.id)?.toString();
+    const isOwn = Boolean(senderIdStr && authIdStr && senderIdStr === authIdStr);
 
     useEffect(() => {
         scroll.current?.scrollIntoView({ behavior: "smooth" });

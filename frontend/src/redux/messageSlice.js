@@ -14,7 +14,8 @@ const messageSlice = createSlice({
             if (!state.messages) {
                 state.messages = [action.payload];
             } else {
-                const exists = state.messages.some(m => m._id === action.payload._id);
+                const newId = (action.payload._id || action.payload.id)?.toString();
+                const exists = state.messages.some(m => (m._id || m.id)?.toString() === newId);
                 if (!exists) {
                     state.messages.push(action.payload);
                 }

@@ -3,9 +3,9 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useSelector, useDispatch } from 'react-redux';
 import { BASE_URL } from '..';
-import { addFriend, removeFriendRequest } from '../redux/userSlice';
+import { addFriend, removeFriendRequest, setSelectedUser } from '../redux/userSlice';
 import { BiSearchAlt2 } from 'react-icons/bi';
-import { IoPersonAddOutline, IoCloseCircleOutline, IoSparklesOutline, IoCheckmark } from 'react-icons/io5';
+import { IoPersonAddOutline, IoCloseCircleOutline, IoSparklesOutline, IoCheckmark, IoChatbubbleEllipsesOutline } from 'react-icons/io5';
 import { FiClock, FiUsers } from 'react-icons/fi';
 import { getAvatarUrl } from '../utils/avatar';
 
@@ -246,16 +246,26 @@ const AddFriendsTab = () => {
                                 src={getAvatarUrl(user.profilePhoto, user.fullName || user.username)}
                                 alt={user.fullName || 'User'}
                                 loading="lazy"
-                                className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700"
+                                className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700 cursor-pointer"
+                                onClick={() => dispatch(setSelectedUser(user))}
                             />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-white font-medium text-sm truncate">{user.fullName}</p>
+                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => dispatch(setSelectedUser(user))}>
+                                <p className="text-white font-medium text-sm truncate hover:text-blue-400 transition-colors">{user.fullName}</p>
                                 <p className="text-gray-400 text-xs truncate">@{user.username}</p>
                                 {user.bio && (
                                     <p className="text-gray-500 text-xs truncate mt-0.5">{user.bio}</p>
                                 )}
                             </div>
-                            {getStatusButton(user)}
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <button
+                                    onClick={() => dispatch(setSelectedUser(user))}
+                                    className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-full transition-all"
+                                    title="Start Chat"
+                                >
+                                    <IoChatbubbleEllipsesOutline className="w-4 h-4" />
+                                </button>
+                                {getStatusButton(user)}
+                            </div>
                         </div>
                     );
                 })}

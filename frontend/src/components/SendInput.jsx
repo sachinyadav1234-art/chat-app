@@ -4,7 +4,7 @@ import { BsEmojiSmile } from "react-icons/bs";
 import EmojiPicker from 'emoji-picker-react';
 import axios from "axios";
 import { useDispatch, useSelector } from "react-redux";
-import { setMessages } from '../redux/messageSlice';
+import { addMessage } from '../redux/messageSlice';
 import { BASE_URL } from '..';
 
 const SendInput = () => {
@@ -13,7 +13,6 @@ const SendInput = () => {
     const [isTypingEmit, setIsTypingEmit] = useState(false);
     const dispatch = useDispatch();
     const { selectedUser } = useSelector(store => store.user);
-    const { messages } = useSelector(store => store.message);
     const { socket } = useSelector(store => store.socket);
     const typingTimeoutRef = useRef(null);
     const emojiRef = useRef(null);
@@ -72,10 +71,10 @@ const SendInput = () => {
             );
             const newMessage = res?.data?.newMessage;
             if (newMessage) {
-                dispatch(setMessages([...(messages || []), newMessage]));
+                dispatch(addMessage(newMessage));
             }
         } catch (error) {
-            console.log(error);
+            console.error("Error sending message:", error);
         }
         setMessage("");
         setShowEmojiPicker(false);

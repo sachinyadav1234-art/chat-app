@@ -1,6 +1,7 @@
+import mongoose from "mongoose";
 import { Conversation } from "../models/conversationModel.js";
 import { Message } from "../models/messageModel.js";
-import { getReceiverSocketId, io } from "../socket/socket.js";
+import { io } from "../socket/socket.js";
 
 export const sendMessage = async (req, res) => {
     try {
@@ -10,6 +11,14 @@ export const sendMessage = async (req, res) => {
 
         if (!message || !String(message).trim()) {
             return res.status(400).json({ message: "Message cannot be empty", success: false });
+        }
+
+        if (!receiverId || !mongoose.Types.ObjectId.isValid(receiverId)) {
+            return res.status(400).json({ message: "Invalid receiver ID", success: false });
+        }
+
+        if (String(senderId) === String(receiverId)) {
+            return res.status(400).json({ message: "Cannot send message to yourself", success: false });
         }
 
         let gotConversation = await Conversation.findOne({
@@ -35,8 +44,9 @@ export const sendMessage = async (req, res) => {
 
         await Promise.all([gotConversation.save(), newMessage.save()]);
 
-        // SOCKET IO: emit directly to receiver's room so all their active devices receive it
+        // SOCKET IO: emit directly to receiver and sender rooms so all connected devices/tabs receive it in real-time
         io.to(receiverId).emit("newMessage", newMessage);
+        io.to(senderId).emit("newMessage", newMessage);
 
         return res.status(201).json({
             success: true,
@@ -52,6 +62,10 @@ export const getMessage = async (req, res) => {
     try {
         const receiverId = req.params.id;
         const senderId = req.id;
+
+        if (!receiverId || !mongoose.Types.ObjectId.isValid(receiverId)) {
+            return res.status(400).json({ message: "Invalid receiver ID", success: false });
+        }
 
         const conversation = await Conversation.findOne({
             participants: { $all: [senderId, receiverId] }
