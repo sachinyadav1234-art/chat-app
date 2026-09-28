@@ -10,8 +10,9 @@ import {
 } from '../redux/callSlice';
 import { BsMicMuteFill, BsMicFill, BsCameraVideoOffFill, BsCameraVideoFill } from 'react-icons/bs';
 import { MdCallEnd, MdScreenShare, MdStopScreenShare } from 'react-icons/md';
-import { IoVideocamOutline, IoCallOutline } from 'react-icons/io5';
+import { IoVideocamOutline, IoCallOutline, IoShieldCheckmarkOutline, IoRefreshOutline } from 'react-icons/io5';
 import { getAvatarUrl } from '../utils/avatar';
+import { getSafeUserMedia } from '../utils/mediaPermissions';
 
 // ─── Web Audio Tone Synthesizer ───────────────────────────────────────
 class SoundEffectManager {
@@ -165,6 +166,7 @@ const CallModal = () => {
     const [remoteStream, setRemoteStream] = useState(null);
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const [callDuration, setCallDuration] = useState(0);
+    const [permissionError, setPermissionError] = useState(null); // { errorType, message }
     const timerRef = useRef(null);
 
     const activeTarget = isCalling ? (targetUser || selectedUser) : caller;
@@ -185,82 +187,28 @@ const CallModal = () => {
         }
     }, [remoteStream, callAccepted, callType]);
 
-    // ─── Helper for Graceful Error Reporting ─────────────────────────
-    const handleMediaError = useCallback((err) => {
-        console.error("Media devices access error:", err);
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            toast.error("Camera/Microphone permission denied. Please allow permission in browser settings.");
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            toast.error("No camera or microphone found on your device.");
-        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-            toast.error("Camera or microphone is already in use by another app.");
-        } else if (err.name === 'OverconstrainedError') {
-            toast.error("Requested video resolution not supported by camera.");
-        } else {
-            toast.error(`Could not access media: ${err.message || err.name}`);
-        }
-    }, []);
-
-    // ─── Acquire Local Media Stream with Multi-Tier Fallback ──────────
+    // ─── Acquire Local Media Stream with Fallback ─────────────────────
     const acquireMedia = useCallback(async (videoRequested = true) => {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            toast.error("Media devices not supported in this browser context (HTTPS required).");
+        setPermissionError(null);
+        const { stream, errorType, message } = await getSafeUserMedia({
+            video: videoRequested && callType === 'video',
+            audio: true
+        });
+
+        if (!stream) {
+            setPermissionError({ errorType, message });
+            toast.error(message || "Could not access microphone or camera");
             return null;
         }
 
-        let stream = null;
-        const wantVideo = videoRequested && callType === 'video';
-
-        if (wantVideo) {
-            // 1. Try optimal HD constraints
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-                });
-            } catch (err1) {
-                console.warn("HD Video failed, trying basic video:", err1);
-                // 2. Try generic video constraints
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: true,
-                        video: true
-                    });
-                } catch (err2) {
-                    console.warn("Basic video failed, checking audio fallback:", err2);
-                    if (err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError') {
-                        handleMediaError(err2);
-                        return null;
-                    }
-                    // 3. Fallback to audio-only if camera device is missing or unreadable
-                    try {
-                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        toast("Camera not available. Continuing with audio only.", { icon: "🎙️" });
-                    } catch (err3) {
-                        handleMediaError(err3);
-                        return null;
-                    }
-                }
-            }
-        } else {
-            // Audio call
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: false
-                });
-            } catch (err) {
-                handleMediaError(err);
-                return null;
-            }
+        if (message) {
+            toast(message, { icon: "ℹ️" });
         }
 
-        if (stream) {
-            myStreamRef.current = stream;
-            setLocalStream(stream);
-        }
+        myStreamRef.current = stream;
+        setLocalStream(stream);
         return stream;
-    }, [callType, handleMediaError]);
+    }, [callType]);
 
     // ─── Call Duration Timer ─────────────────────────────────────────
     useEffect(() => {
@@ -283,15 +231,15 @@ const CallModal = () => {
 
     // ─── Ringtone Sound Management ───────────────────────────────────
     useEffect(() => {
-        if (isReceivingCall && !callAccepted) {
+        if (isReceivingCall && !callAccepted && !permissionError) {
             sounds.playIncomingRing();
-        } else if (isCalling && !callAccepted) {
+        } else if (isCalling && !callAccepted && !permissionError) {
             sounds.playOutgoingRing();
         } else {
             sounds.stop();
         }
         return () => sounds.stop();
-    }, [isReceivingCall, isCalling, callAccepted]);
+    }, [isReceivingCall, isCalling, callAccepted, permissionError]);
 
     // ─── Cleanup Helper ──────────────────────────────────────────────
     const cleanupAndReset = useCallback(() => {
@@ -300,6 +248,7 @@ const CallModal = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         setCallDuration(0);
         setIsScreenSharing(false);
+        setPermissionError(null);
 
         if (myStreamRef.current) {
             myStreamRef.current.getTracks().forEach(track => track.stop());
@@ -352,13 +301,6 @@ const CallModal = () => {
             }
         };
 
-        // Connection state changes
-        pc.onconnectionstatechange = () => {
-            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-                console.log("Peer connection state:", pc.connectionState);
-            }
-        };
-
         return pc;
     }, [socket]);
 
@@ -366,8 +308,7 @@ const CallModal = () => {
     const answerCall = async () => {
         sounds.stop();
         const stream = await acquireMedia(callType === 'video');
-        if (!stream && callType === 'audio') {
-            rejectCall();
+        if (!stream) {
             return;
         }
 
@@ -380,7 +321,6 @@ const CallModal = () => {
             if (callerSignal) {
                 await pc.setRemoteDescription(new RTCSessionDescription(callerSignal));
 
-                // Process any queued ICE candidates
                 while (pendingIceCandidatesRef.current.length > 0) {
                     const candidate = pendingIceCandidatesRef.current.shift();
                     try {
@@ -405,58 +345,44 @@ const CallModal = () => {
     };
 
     // ─── Outgoing Call Initiation (Caller) ────────────────────────────
+    const startOutgoingCall = useCallback(async (target) => {
+        const stream = await acquireMedia(callType === 'video');
+        if (!stream) return;
+
+        const targetId = target._id;
+        const pc = createPeerConnection(targetId, stream);
+
+        try {
+            const offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: callType === 'video'
+            });
+            await pc.setLocalDescription(offer);
+
+            socket.emit('callUser', {
+                userToCall: targetId,
+                signalData: offer,
+                from: authUser._id,
+                fromUser: {
+                    _id: authUser._id,
+                    fullName: authUser.fullName,
+                    profilePhoto: authUser.profilePhoto,
+                    username: authUser.username
+                },
+                callType
+            });
+        } catch (err) {
+            console.error("Error creating WebRTC offer:", err);
+            toast.error("Failed to initiate call");
+            cleanupAndReset();
+        }
+    }, [acquireMedia, authUser, callType, cleanupAndReset, createPeerConnection, socket]);
+
     useEffect(() => {
         const target = targetUser || selectedUser;
         if (!isCalling || !target || callAccepted || !socket) return;
 
-        let isCancelled = false;
-
-        const initiateCall = async () => {
-            const stream = await acquireMedia(callType === 'video');
-            if (isCancelled) {
-                if (stream) stream.getTracks().forEach(t => t.stop());
-                return;
-            }
-
-            if (!stream) {
-                dispatch(resetCall());
-                return;
-            }
-
-            const targetId = target._id;
-            const pc = createPeerConnection(targetId, stream);
-
-            try {
-                const offer = await pc.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: callType === 'video'
-                });
-                await pc.setLocalDescription(offer);
-
-                socket.emit('callUser', {
-                    userToCall: targetId,
-                    signalData: offer,
-                    from: authUser._id,
-                    fromUser: {
-                        _id: authUser._id,
-                        fullName: authUser.fullName,
-                        profilePhoto: authUser.profilePhoto,
-                        username: authUser.username
-                    },
-                    callType
-                });
-            } catch (err) {
-                console.error("Error creating WebRTC offer:", err);
-                toast.error("Failed to initiate call");
-                cleanupAndReset();
-            }
-        };
-
-        initiateCall();
-
-        return () => {
-            isCancelled = true;
-        };
+        startOutgoingCall(target);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isCalling, socket, targetUser, selectedUser]);
 
@@ -473,7 +399,6 @@ const CallModal = () => {
                 try {
                     await pc.setRemoteDescription(new RTCSessionDescription(answerSignal));
 
-                    // Process any queued ICE candidates
                     while (pendingIceCandidatesRef.current.length > 0) {
                         const candidate = pendingIceCandidatesRef.current.shift();
                         try {
@@ -603,7 +528,7 @@ const CallModal = () => {
             const pc = peerConnectionRef.current;
             if (pc && originalVideoTrack) {
                 const senders = pc.getSenders();
-                const videoSender = senders.find(s => s.track?.kind === 'video');
+                const videoSender = senders.find(s => s.track && s.track.kind === 'video');
                 if (videoSender) {
                     videoSender.replaceTrack(originalVideoTrack);
                 }
@@ -614,6 +539,62 @@ const CallModal = () => {
 
     const isVisible = isReceivingCall || isCalling || callAccepted;
     if (!isVisible) return null;
+
+    // ─── PERMISSION / DEVICE ERROR OVERLAY ────────────────────────────
+    if (permissionError) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn">
+                <div className="flex flex-col items-center p-6 sm:p-8 bg-gray-900 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 text-amber-400">
+                        <IoShieldCheckmarkOutline className="w-9 h-9" />
+                    </div>
+
+                    <h2 className="text-white font-bold text-lg sm:text-xl mb-2">
+                        {permissionError.errorType === 'HTTPS_REQUIRED'
+                            ? 'HTTPS Connection Required'
+                            : 'Camera & Microphone Access Needed'}
+                    </h2>
+
+                    <p className="text-gray-300 text-sm leading-relaxed mb-5">
+                        {permissionError.message}
+                    </p>
+
+                    {permissionError.errorType === 'PERMISSION_DENIED' && (
+                        <div className="w-full bg-gray-800/80 rounded-2xl p-4 text-left text-xs text-gray-300 space-y-2 mb-6 border border-gray-700">
+                            <p className="font-semibold text-white flex items-center gap-1.5">
+                                <span>💡</span> How to enable permissions:
+                            </p>
+                            <p>1. Click the <strong>lock / camera / settings</strong> icon in your browser's address bar (next to the URL).</p>
+                            <p>2. Set <strong>Camera</strong> and <strong>Microphone</strong> permissions to <strong>Allow</strong>.</p>
+                            <p>3. Click the <strong>"Retry Permission"</strong> button below.</p>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-3 w-full">
+                        <button
+                            onClick={cleanupAndReset}
+                            className="flex-1 py-3 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-sm transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => {
+                                const target = targetUser || selectedUser;
+                                if (isCalling && target) {
+                                    startOutgoingCall(target);
+                                } else if (isReceivingCall) {
+                                    answerCall();
+                                }
+                            }}
+                            className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg"
+                        >
+                            <IoRefreshOutline className="w-4 h-4" /> Retry Permission
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-fadeIn">
