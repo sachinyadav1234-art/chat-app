@@ -42,8 +42,10 @@ export const getReceiverSocketId = (receiverId) => {
 };
 
 io.on('connection', (socket) => {
-    const userId = socket.handshake.query.userId;
-    if (userId && userId !== "undefined" && userId !== "null") {
+    const rawUserId = socket.handshake.query.userId;
+    const userId = rawUserId && rawUserId !== "undefined" && rawUserId !== "null" ? String(rawUserId).trim() : null;
+
+    if (userId) {
         socket.join(userId);
         if (!userSocketMap[userId]) {
             userSocketMap[userId] = new Set();
@@ -55,25 +57,30 @@ io.on('connection', (socket) => {
 
     // ─── Typing Indicators ───────────────────────────────────────
     socket.on('typing', ({ to }) => {
-        if (to) {
-            io.to(to).emit('typing', { from: userId });
+        const targetId = String(to || "").trim();
+        if (targetId) {
+            io.to(targetId).emit('typing', { from: userId });
         }
     });
 
     socket.on('stopTyping', ({ to }) => {
-        if (to) {
-            io.to(to).emit('stopTyping', { from: userId });
+        const targetId = String(to || "").trim();
+        if (targetId) {
+            io.to(targetId).emit('stopTyping', { from: userId });
         }
     });
 
     // ─── WebRTC Signaling ─────────────────────────────────────────
     socket.on('callUser', ({ userToCall, signalData, from, fromUser, callType }) => {
-        if (userSocketMap[userToCall] && userSocketMap[userToCall].size > 0) {
-            io.to(userToCall).emit('incomingCall', {
+        const targetId = String(userToCall || "").trim();
+        const fromId = String(from || userId || "").trim();
+
+        if (targetId && userSocketMap[targetId] && userSocketMap[targetId].size > 0) {
+            io.to(targetId).emit('incomingCall', {
                 signal: signalData,
-                from,
-                fromUser,
-                callType
+                from: fromId,
+                fromUser: fromUser || { _id: fromId },
+                callType: callType || 'video'
             });
         } else {
             socket.emit('callRejected', { reason: 'User is currently offline' });
@@ -81,26 +88,30 @@ io.on('connection', (socket) => {
     });
 
     socket.on('answerCall', ({ to, signal }) => {
-        if (to) {
-            io.to(to).emit('callAccepted', signal);
+        const targetId = String(to || "").trim();
+        if (targetId) {
+            io.to(targetId).emit('callAccepted', signal);
         }
     });
 
     socket.on('rejectCall', ({ to }) => {
-        if (to) {
-            io.to(to).emit('callRejected', { reason: 'Call declined' });
+        const targetId = String(to || "").trim();
+        if (targetId) {
+            io.to(targetId).emit('callRejected', { reason: 'Call declined' });
         }
     });
 
     socket.on('endCall', ({ to }) => {
-        if (to) {
-            io.to(to).emit('callEnded');
+        const targetId = String(to || "").trim();
+        if (targetId) {
+            io.to(targetId).emit('callEnded');
         }
     });
 
     socket.on('iceCandidate', ({ to, candidate }) => {
-        if (to) {
-            io.to(to).emit('iceCandidate', { candidate });
+        const targetId = String(to || "").trim();
+        if (targetId && candidate) {
+            io.to(targetId).emit('iceCandidate', { candidate });
         }
     });
 
