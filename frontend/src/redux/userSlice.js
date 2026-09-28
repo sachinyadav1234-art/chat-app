@@ -1,10 +1,12 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+const initialToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
 const userSlice = createSlice({
     name: "user",
     initialState: {
         authUser: null,
-        token: null,
+        token: initialToken,
         otherUsers: [],
         selectedUser: null,
         onlineUsers: [],
@@ -27,15 +29,30 @@ const userSlice = createSlice({
                 state.searchResultUsers = [];
                 state.friendRequestBadge = 0;
                 state.typingUsers = {};
+                try {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('authUser');
+                } catch (e) {}
             } else {
                 state.authUser = action.payload;
-                if (action.payload.token) {
-                    state.token = action.payload.token;
+                const token = action.payload.token || action.payload.user?.token;
+                if (token && token !== 'undefined' && token !== 'null') {
+                    state.token = token;
+                    try {
+                        localStorage.setItem('token', token);
+                    } catch (e) {}
                 }
             }
         },
         setToken: (state, action) => {
             state.token = action.payload;
+            try {
+                if (action.payload && action.payload !== 'undefined' && action.payload !== 'null') {
+                    localStorage.setItem('token', action.payload);
+                } else {
+                    localStorage.removeItem('token');
+                }
+            } catch (e) {}
         },
         setOtherUsers: (state, action) => {
             state.otherUsers = Array.isArray(action.payload) ? action.payload : [];

@@ -18,6 +18,8 @@ const escapeRegex = (text) => {
     return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 };
 
+const JWT_SECRET = process.env.JWT_SECRET_KEY || process.env.JWT_SECRET || "djhbfvdshjbeerff";
+
 // ─── REGISTER ─────────────────────────────────────────────────────────────────
 export const register = async (req, res) => {
     try {
@@ -60,7 +62,7 @@ export const register = async (req, res) => {
             friendRequests: []
         });
 
-        const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET_KEY, { expiresIn: "7d" });
+        const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
         return res.status(201)
             .cookie("token", token, getCookieOptions())
@@ -101,7 +103,7 @@ export const login = async (req, res) => {
             return res.status(400).json({ message: "Incorrect username or password", success: false });
         }
 
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET_KEY, { expiresIn: "7d" });
+        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "7d" });
 
         return res.status(200)
             .cookie("token", token, getCookieOptions())

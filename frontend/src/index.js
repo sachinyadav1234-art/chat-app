@@ -18,16 +18,19 @@ if (typeof window !== 'undefined' && !window.global) {
 export const BASE_URL = process.env.REACT_APP_BACKEND_URL || "https://chat-app-backend-7wng.onrender.com";
 
 // ─── Global Axios Configuration & Dual Authentication Interceptor ─────────────
-// Attaches Bearer JWT token from state to every outgoing request + includes credentials
+// Attaches Bearer JWT token from state or localStorage to every outgoing request
 axios.defaults.withCredentials = true;
-axios.defaults.timeout = 15000; // 15 seconds timeout to prevent hanging requests
+axios.defaults.timeout = 15000;
 
 axios.interceptors.request.use((config) => {
     try {
         const state = store.getState();
-        const token = state.user?.token || state.user?.authUser?.token;
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        let token = state.user?.token || state.user?.authUser?.token;
+        if (!token || token === 'undefined' || token === 'null') {
+            token = localStorage.getItem('token');
+        }
+        if (token && token !== 'undefined' && token !== 'null') {
+            config.headers.Authorization = `Bearer ${token.trim()}`;
         }
     } catch (e) {
         console.warn("Could not attach auth header", e);

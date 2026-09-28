@@ -39,6 +39,13 @@ const Sidebar = () => {
         try {
             const res = await axios.get(`${BASE_URL}/api/v1/user/logout`, { withCredentials: true });
             toast.success(res.data.message || "Logged out");
+        } catch (error) {
+            console.error(error);
+        } finally {
+            try {
+                localStorage.removeItem('token');
+                localStorage.removeItem('authUser');
+            } catch (e) {}
             dispatch(setAuthUser(null));
             dispatch(setMessages(null));
             dispatch(setOtherUsers(null));
@@ -46,8 +53,6 @@ const Sidebar = () => {
             dispatch(setFriends([]));
             dispatch(setFriendRequests([]));
             navigate("/login");
-        } catch (error) {
-            console.error(error);
         }
     };
 
