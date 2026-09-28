@@ -17,8 +17,11 @@ router.route("/search").get(isAuthenticated, searchUsers);
 router.route("/friends").get(isAuthenticated, getFriends);
 router.route("/friend-requests").get(isAuthenticated, getFriendRequests);
 router.route("/friend-request/send/:id").post(isAuthenticated, sendFriendRequest);
+router.route("/friend-request/:id").post(isAuthenticated, sendFriendRequest);
 router.route("/friend-request/accept/:id").post(isAuthenticated, acceptFriendRequest);
+router.route("/accept-request/:id").post(isAuthenticated, acceptFriendRequest);
 router.route("/friend-request/reject/:id").post(isAuthenticated, rejectFriendRequest);
+router.route("/reject-request/:id").post(isAuthenticated, rejectFriendRequest);
 router.route("/update-profile").post(isAuthenticated, upload.single("profilePhoto"), updateProfile);
 
 export default router;
