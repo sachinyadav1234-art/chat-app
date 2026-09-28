@@ -209,7 +209,8 @@ export const getFriends = async (req, res) => {
     try {
         const loggedInUserId = req.id;
         const user = await User.findById(loggedInUserId).populate("friends", "-password -friendRequests");
-        return res.status(200).json(user ? user.friends : []);
+        const validFriends = (user?.friends || []).filter(f => f && f._id);
+        return res.status(200).json(validFriends);
     } catch (error) {
         console.error("Get Friends Error:", error);
         return res.status(500).json({ message: "Internal server error", success: false });

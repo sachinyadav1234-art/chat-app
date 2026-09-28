@@ -1,11 +1,10 @@
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setMessages } from "../redux/messageSlice";
+import { addMessage } from "../redux/messageSlice";
 import toast from "react-hot-toast";
 
 const useGetRealTimeMessage = () => {
     const { socket } = useSelector(store => store.socket);
-    const { messages } = useSelector(store => store.message);
     const { selectedUser, otherUsers, friends } = useSelector(store => store.user);
     const dispatch = useDispatch();
 
@@ -15,20 +14,18 @@ const useGetRealTimeMessage = () => {
         const handleNewMessage = (newMessage) => {
             if (!newMessage) return;
 
-            const isCurrentChat = selectedUser &&
-                (newMessage.senderId === selectedUser._id || newMessage.receiverId === selectedUser._id);
+            const selectedId = selectedUser?._id?.toString();
+            const senderId = (newMessage.senderId?._id || newMessage.senderId)?.toString();
+            const receiverId = (newMessage.receiverId?._id || newMessage.receiverId)?.toString();
+
+            const isCurrentChat = selectedId && (senderId === selectedId || receiverId === selectedId);
 
             if (isCurrentChat) {
-                // Avoid duplicate messages if already present
-                const currentList = messages || [];
-                const alreadyExists = currentList.some(m => m._id === newMessage._id);
-                if (!alreadyExists) {
-                    dispatch(setMessages([...currentList, newMessage]));
-                }
+                dispatch(addMessage(newMessage));
             } else {
                 // Message from someone else: Show notification toast
-                const senderObj = (friends || []).find(f => f._id === newMessage.senderId) ||
-                                  (otherUsers || []).find(u => u._id === newMessage.senderId);
+                const senderObj = (friends || []).find(f => (f._id || f)?.toString() === senderId) ||
+                                  (otherUsers || []).find(u => (u._id || u)?.toString() === senderId);
                 const senderName = senderObj?.fullName || "Someone";
                 toast(`💬 ${senderName}: ${newMessage.message}`, {
                     duration: 3500,
@@ -41,7 +38,7 @@ const useGetRealTimeMessage = () => {
         return () => {
             socket.off("newMessage", handleNewMessage);
         };
-    }, [socket, messages, selectedUser, friends, otherUsers, dispatch]);
+    }, [socket, selectedUser, friends, otherUsers, dispatch]);
 };
 
 export default useGetRealTimeMessage;

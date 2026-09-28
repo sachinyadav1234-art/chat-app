@@ -3,8 +3,10 @@ import Sidebar from './Sidebar';
 import MessageContainer from './MessageContainer';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import useGetRealTimeMessage from '../hooks/useGetRealTimeMessage';
 
 const HomePage = () => {
+    useGetRealTimeMessage();
     const { authUser, selectedUser } = useSelector(store => store.user);
     const navigate = useNavigate();
 
