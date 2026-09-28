@@ -1,6 +1,7 @@
 import { User } from "../models/userModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import { io, getReceiverSocketId } from "../socket/socket.js";
 import cloudinary from "../config/cloudinary.js";
 
@@ -168,21 +169,21 @@ export const searchUsers = async (req, res) => {
         }
 
         const me = await User.findById(loggedInUserId).select("friends friendRequests");
-        const myFriendIds = (me?.friends || []).map(f => f?.toString()).filter(Boolean);
+        const myFriendIds = (me?.friends || []).map(f => (f?._id || f)?.toString()).filter(Boolean);
         const myIncomingRequests = me?.friendRequests || [];
 
         const result = (users || []).map(u => {
-            const uId = u._id?.toString();
+            const uId = (u._id || u.id)?.toString();
             const isFriend = myFriendIds.includes(uId);
 
             // Did this user send ME a pending request?
             const receivedRequest = myIncomingRequests.find(
-                r => r?.sender && r.sender.toString() === uId && r.status === "pending"
+                r => r?.sender && (r.sender?._id || r.sender)?.toString() === uId && r.status === "pending"
             );
 
             // Did I send THIS USER a pending request?
             const sentRequest = (u.friendRequests || []).find(
-                r => r?.sender && r.sender.toString() === loggedInUserId.toString() && r.status === "pending"
+                r => r?.sender && (r.sender?._id || r.sender)?.toString() === loggedInUserId.toString() && r.status === "pending"
             );
 
             let friendStatus = "none";
@@ -190,7 +191,7 @@ export const searchUsers = async (req, res) => {
             else if (sentRequest) friendStatus = "pending";
             else if (receivedRequest) friendStatus = "received";
 
-            const userObj = u.toObject();
+            const userObj = u.toObject ? u.toObject() : { ...u };
             delete userObj.friendRequests;
 
             return {
@@ -238,46 +239,57 @@ export const sendFriendRequest = async (req, res) => {
         const senderId = req.id;
         const receiverId = req.params.id;
 
-        if (!receiverId || senderId.toString() === receiverId.toString()) {
+        const cleanSenderId = String(senderId || "").trim();
+        const cleanReceiverId = String(receiverId || "").trim();
+
+        if (!cleanReceiverId || cleanSenderId === cleanReceiverId) {
             return res.status(400).json({ message: "Invalid user request", success: false });
         }
 
-        const sender = await User.findById(senderId).select("fullName username profilePhoto bio friends friendRequests");
-        const receiver = await User.findById(receiverId).select("fullName username profilePhoto bio friends friendRequests");
-
-        if (!receiver || !sender) {
-            return res.status(404).json({ message: "User not found", success: false });
+        if (!mongoose.Types.ObjectId.isValid(cleanReceiverId) || !mongoose.Types.ObjectId.isValid(cleanSenderId)) {
+            return res.status(400).json({ message: "Invalid user ID format", success: false });
         }
 
-        const senderFriends = (sender.friends || []).map(f => f?.toString());
+        const sender = await User.findById(cleanSenderId).select("fullName username profilePhoto bio friends friendRequests");
+        const receiver = await User.findById(cleanReceiverId).select("fullName username profilePhoto bio friends friendRequests");
+
+        if (!receiver) {
+            return res.status(404).json({ message: "Target user not found", success: false });
+        }
+
+        if (!sender) {
+            return res.status(401).json({ message: "Your session is invalid. Please log in again.", success: false });
+        }
+
+        const senderFriends = (sender.friends || []).map(f => (f?._id || f)?.toString());
         const senderRequests = sender.friendRequests || [];
         const receiverRequests = receiver.friendRequests || [];
 
         // 1. Check if already friends
-        if (senderFriends.includes(receiverId.toString())) {
+        if (senderFriends.includes(cleanReceiverId)) {
             return res.status(400).json({ message: "Already friends with this user", success: false });
         }
 
         // 2. Check if receiver already sent a request to sender (cross-request -> auto-accept!)
         const incomingFromReceiver = senderRequests.find(
-            r => r?.sender && r.sender.toString() === receiverId.toString() && r.status === "pending"
+            r => r?.sender && (r.sender?._id || r.sender)?.toString() === cleanReceiverId && r.status === "pending"
         );
 
         if (incomingFromReceiver) {
             // Auto accept: add to friends on both sides atomically
             await Promise.all([
-                User.findByIdAndUpdate(senderId, {
-                    $addToSet: { friends: receiverId },
+                User.findByIdAndUpdate(cleanSenderId, {
+                    $addToSet: { friends: cleanReceiverId },
                     $set: { "friendRequests.$[elem].status": "accepted" }
                 }, {
-                    arrayFilters: [{ "elem.sender": receiverId }]
+                    arrayFilters: [{ "elem.sender": cleanReceiverId }]
                 }),
-                User.findByIdAndUpdate(receiverId, {
-                    $addToSet: { friends: senderId }
+                User.findByIdAndUpdate(cleanReceiverId, {
+                    $addToSet: { friends: cleanSenderId }
                 })
             ]);
 
-            io.to(receiverId).emit("friendRequestAccepted", {
+            io.to(cleanReceiverId).emit("friendRequestAccepted", {
                 _id: sender._id,
                 fullName: sender.fullName,
                 username: sender.username,
@@ -301,22 +313,22 @@ export const sendFriendRequest = async (req, res) => {
 
         // 3. Check if request is already pending
         const alreadyPending = receiverRequests.some(
-            r => r?.sender && r.sender.toString() === senderId.toString() && r.status === "pending"
+            r => r?.sender && (r.sender?._id || r.sender)?.toString() === cleanSenderId && r.status === "pending"
         );
         if (alreadyPending) {
-            return res.status(400).json({ message: "Friend request already sent", success: false });
+            return res.status(200).json({ message: "Friend request already sent", success: true });
         }
 
         // 4. Remove any existing non-pending request and push fresh pending request atomically
-        await User.findByIdAndUpdate(receiverId, {
-            $pull: { friendRequests: { sender: senderId } }
+        await User.findByIdAndUpdate(cleanReceiverId, {
+            $pull: { friendRequests: { sender: cleanSenderId } }
         });
-        await User.findByIdAndUpdate(receiverId, {
-            $push: { friendRequests: { sender: senderId, status: "pending" } }
+        await User.findByIdAndUpdate(cleanReceiverId, {
+            $push: { friendRequests: { sender: cleanSenderId, status: "pending" } }
         });
 
         // 5. Real-time notification to receiver
-        io.to(receiverId).emit("newFriendRequest", {
+        io.to(cleanReceiverId).emit("newFriendRequest", {
             _id: sender._id,
             fullName: sender.fullName,
             username: sender.username,
@@ -337,17 +349,24 @@ export const acceptFriendRequest = async (req, res) => {
         const loggedInUserId = req.id;
         const senderId = req.params.id;
 
-        if (!senderId || loggedInUserId.toString() === senderId.toString()) {
+        const cleanSenderId = String(senderId || "").trim();
+        const cleanMyId = String(loggedInUserId || "").trim();
+
+        if (!cleanSenderId || cleanMyId === cleanSenderId) {
             return res.status(400).json({ message: "Invalid request", success: false });
         }
 
-        const me = await User.findById(loggedInUserId).select("fullName username profilePhoto bio friends friendRequests");
-        const sender = await User.findById(senderId).select("fullName username profilePhoto bio friends friendRequests");
+        if (!mongoose.Types.ObjectId.isValid(cleanSenderId) || !mongoose.Types.ObjectId.isValid(cleanMyId)) {
+            return res.status(400).json({ message: "Invalid user ID format", success: false });
+        }
+
+        const me = await User.findById(cleanMyId).select("fullName username profilePhoto bio friends friendRequests");
+        const sender = await User.findById(cleanSenderId).select("fullName username profilePhoto bio friends friendRequests");
 
         if (!sender || !me) return res.status(404).json({ message: "User not found", success: false });
 
-        const myFriends = (me.friends || []).map(f => f?.toString());
-        if (myFriends.includes(senderId.toString())) {
+        const myFriends = (me.friends || []).map(f => (f?._id || f)?.toString());
+        if (myFriends.includes(cleanSenderId)) {
             return res.status(200).json({
                 message: "Already friends",
                 success: true,
@@ -363,22 +382,22 @@ export const acceptFriendRequest = async (req, res) => {
 
         // Update friendRequests status & add to friends on both sides atomically
         await Promise.all([
-            User.findByIdAndUpdate(loggedInUserId, {
-                $addToSet: { friends: senderId },
+            User.findByIdAndUpdate(cleanMyId, {
+                $addToSet: { friends: cleanSenderId },
                 $set: { "friendRequests.$[elem].status": "accepted" }
             }, {
-                arrayFilters: [{ "elem.sender": senderId }]
+                arrayFilters: [{ "elem.sender": cleanSenderId }]
             }),
-            User.findByIdAndUpdate(senderId, {
-                $addToSet: { friends: loggedInUserId },
+            User.findByIdAndUpdate(cleanSenderId, {
+                $addToSet: { friends: cleanMyId },
                 $set: { "friendRequests.$[elem].status": "accepted" }
             }, {
-                arrayFilters: [{ "elem.sender": loggedInUserId }]
+                arrayFilters: [{ "elem.sender": cleanMyId }]
             })
         ]);
 
         // Real-time notification to sender
-        io.to(senderId).emit("friendRequestAccepted", {
+        io.to(cleanSenderId).emit("friendRequestAccepted", {
             _id: me._id,
             fullName: me.fullName,
             username: me.username,
@@ -409,10 +428,13 @@ export const rejectFriendRequest = async (req, res) => {
         const loggedInUserId = req.id;
         const senderId = req.params.id;
 
-        await User.findByIdAndUpdate(loggedInUserId, {
+        const cleanSenderId = String(senderId || "").trim();
+        const cleanMyId = String(loggedInUserId || "").trim();
+
+        await User.findByIdAndUpdate(cleanMyId, {
             $set: { "friendRequests.$[elem].status": "rejected" }
         }, {
-            arrayFilters: [{ "elem.sender": senderId, "elem.status": "pending" }]
+            arrayFilters: [{ "elem.sender": cleanSenderId, "elem.status": "pending" }]
         });
 
         return res.status(200).json({ message: "Friend request rejected", success: true });

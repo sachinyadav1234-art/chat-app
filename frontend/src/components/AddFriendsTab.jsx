@@ -61,10 +61,12 @@ const AddFriendsTab = () => {
     };
 
     const sendRequest = async (userId) => {
-        setActionLoading(prev => ({ ...prev, [userId]: true }));
+        if (!userId) return;
+        const targetUserId = String(userId).trim();
+        setActionLoading(prev => ({ ...prev, [targetUserId]: true }));
         try {
             const res = await axios.post(
-                `${BASE_URL}/api/v1/user/friend-request/send/${userId}`,
+                `${BASE_URL}/api/v1/user/friend-request/send/${targetUserId}`,
                 {},
                 {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -73,26 +75,28 @@ const AddFriendsTab = () => {
             );
 
             if (res.data?.autoAccepted) {
-                const targetUser = results.find(u => u._id === userId);
+                const targetUser = results.find(u => (u._id || u.id)?.toString() === targetUserId);
                 if (targetUser) dispatch(addFriend(targetUser));
-                setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'friends' } : u));
+                setResults(prev => prev.map(u => (u._id || u.id)?.toString() === targetUserId ? { ...u, friendStatus: 'friends' } : u));
                 toast.success("You are now friends! 🎉");
             } else {
-                setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'pending' } : u));
+                setResults(prev => prev.map(u => (u._id || u.id)?.toString() === targetUserId ? { ...u, friendStatus: 'pending' } : u));
                 toast.success("Friend request sent! ✉️");
             }
         } catch (err) {
             toast.error(err.response?.data?.message || "Failed to send request");
         } finally {
-            setActionLoading(prev => ({ ...prev, [userId]: false }));
+            setActionLoading(prev => ({ ...prev, [targetUserId]: false }));
         }
     };
 
     const acceptRequest = async (userId) => {
-        setActionLoading(prev => ({ ...prev, [userId]: true }));
+        if (!userId) return;
+        const targetUserId = String(userId).trim();
+        setActionLoading(prev => ({ ...prev, [targetUserId]: true }));
         try {
             const res = await axios.post(
-                `${BASE_URL}/api/v1/user/friend-request/accept/${userId}`,
+                `${BASE_URL}/api/v1/user/friend-request/accept/${targetUserId}`,
                 {},
                 {
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -100,24 +104,24 @@ const AddFriendsTab = () => {
                 }
             );
 
-            const targetUser = results.find(u => u._id === userId);
+            const targetUser = results.find(u => (u._id || u.id)?.toString() === targetUserId);
             if (res.data?.friend) {
                 dispatch(addFriend(res.data.friend));
             } else if (targetUser) {
                 dispatch(addFriend(targetUser));
             }
-            dispatch(removeFriendRequest(userId));
-            setResults(prev => prev.map(u => u._id === userId ? { ...u, friendStatus: 'friends' } : u));
+            dispatch(removeFriendRequest(targetUserId));
+            setResults(prev => prev.map(u => (u._id || u.id)?.toString() === targetUserId ? { ...u, friendStatus: 'friends' } : u));
             toast.success("Friend request accepted! 🎉");
         } catch (err) {
             toast.error(err.response?.data?.message || "Failed to accept request");
         } finally {
-            setActionLoading(prev => ({ ...prev, [userId]: false }));
+            setActionLoading(prev => ({ ...prev, [targetUserId]: false }));
         }
     };
 
     const getStatusButton = (user) => {
-        const uId = user._id?.toString();
+        const uId = (user._id || user.id)?.toString();
         const isFriend = friends?.some(f => (f._id || f)?.toString() === uId) || user.friendStatus === 'friends';
         if (isFriend) {
             return (
@@ -134,12 +138,12 @@ const AddFriendsTab = () => {
         if (hasIncomingRequest) {
             return (
                 <button
-                    onClick={() => acceptRequest(user._id)}
-                    disabled={actionLoading[user._id]}
+                    onClick={() => acceptRequest(uId)}
+                    disabled={actionLoading[uId]}
                     className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-full transition-all shadow-sm"
                     title="Accept Friend Request"
                 >
-                    {actionLoading[user._id] ? (
+                    {actionLoading[uId] ? (
                         <span className="loading loading-spinner loading-xs"></span>
                     ) : (
                         <>
@@ -153,18 +157,18 @@ const AddFriendsTab = () => {
         if (user.friendStatus === 'pending') {
             return (
                 <div className="flex items-center gap-1 text-yellow-400 text-xs font-medium px-3 py-1.5 bg-yellow-400/10 rounded-full border border-yellow-400/20">
-                    <FiClock className="w-3 h-3" /> Requested
+                    <FiClock className="w-3 h-3" /> Request Sent
                 </div>
             );
         }
 
         return (
             <button
-                onClick={() => sendRequest(user._id)}
-                disabled={actionLoading[user._id]}
+                onClick={() => sendRequest(uId)}
+                disabled={actionLoading[uId]}
                 className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full transition-all shadow-sm disabled:opacity-50"
             >
-                {actionLoading[user._id] ? (
+                {actionLoading[uId] ? (
                     <span className="loading loading-spinner loading-xs"></span>
                 ) : (
                     <>
@@ -231,27 +235,30 @@ const AddFriendsTab = () => {
                     </div>
                 )}
 
-                {results.map(user => (
-                    <div
-                        key={user._id}
-                        className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
-                    >
-                        <img
-                            src={getAvatarUrl(user.profilePhoto, user.fullName || user.username)}
-                            alt={user.fullName || 'User'}
-                            loading="lazy"
-                            className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700"
-                        />
-                        <div className="flex-1 min-w-0">
-                            <p className="text-white font-medium text-sm truncate">{user.fullName}</p>
-                            <p className="text-gray-400 text-xs truncate">@{user.username}</p>
-                            {user.bio && (
-                                <p className="text-gray-500 text-xs truncate mt-0.5">{user.bio}</p>
-                            )}
+                {results.map(user => {
+                    const uId = (user._id || user.id)?.toString();
+                    return (
+                        <div
+                            key={uId}
+                            className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 hover:bg-gray-800 transition-all"
+                        >
+                            <img
+                                src={getAvatarUrl(user.profilePhoto, user.fullName || user.username)}
+                                alt={user.fullName || 'User'}
+                                loading="lazy"
+                                className="w-11 h-11 rounded-full object-cover flex-shrink-0 border border-gray-700"
+                            />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-white font-medium text-sm truncate">{user.fullName}</p>
+                                <p className="text-gray-400 text-xs truncate">@{user.username}</p>
+                                {user.bio && (
+                                    <p className="text-gray-500 text-xs truncate mt-0.5">{user.bio}</p>
+                                )}
+                            </div>
+                            {getStatusButton(user)}
                         </div>
-                        {getStatusButton(user)}
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
