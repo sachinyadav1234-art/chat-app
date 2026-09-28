@@ -1,7 +1,7 @@
 import express from "express";
 import {
     getOtherUsers, login, logout, register,
-    sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
+    sendFriendRequest, acceptFriendRequest, rejectFriendRequest, cancelFriendRequest,
     getFriends, getFriendRequests, searchUsers, updateProfile
 } from "../controllers/userController.js";
 import isAuthenticated from "../middleware/isAuthenticated.js";
@@ -22,6 +22,8 @@ router.route("/friend-request/accept/:id").post(isAuthenticated, acceptFriendReq
 router.route("/accept-request/:id").post(isAuthenticated, acceptFriendRequest);
 router.route("/friend-request/reject/:id").post(isAuthenticated, rejectFriendRequest);
 router.route("/reject-request/:id").post(isAuthenticated, rejectFriendRequest);
+router.route("/friend-request/cancel/:id").post(isAuthenticated, cancelFriendRequest);
+router.route("/cancel-request/:id").post(isAuthenticated, cancelFriendRequest);
 router.route("/update-profile").post(isAuthenticated, upload.single("profilePhoto"), updateProfile);
 
 export default router;

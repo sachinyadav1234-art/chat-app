@@ -222,16 +222,72 @@ export const getFriends = async (req, res) => {
     }
 };
 
-// ─── GET FRIEND REQUESTS ─────────────────────────────────────────────────────
+// ─── GET FRIEND REQUESTS (Incoming & Outgoing) ──────────────────────────────
 export const getFriendRequests = async (req, res) => {
     try {
         const loggedInUserId = req.id;
-        const user = await User.findById(loggedInUserId).populate("friendRequests.sender", "-password -friendRequests");
+        const cleanMyId = String(loggedInUserId || "").trim();
+
+        // 1. Incoming requests sent to me
+        const user = await User.findById(cleanMyId).populate("friendRequests.sender", "-password -friendRequests");
         const incoming = (user?.friendRequests || []).filter(r => r && r.status === "pending" && r.sender);
-        return res.status(200).json({ incoming });
+
+        // 2. Outgoing requests sent by me
+        const sentUsers = await User.find({
+            "friendRequests": {
+                $elemMatch: {
+                    sender: cleanMyId,
+                    status: "pending"
+                }
+            }
+        }).select("fullName username profilePhoto bio friendRequests createdAt");
+
+        const outgoing = (sentUsers || []).map(u => {
+            const reqInfo = (u.friendRequests || []).find(
+                r => r?.sender?.toString() === cleanMyId && r.status === "pending"
+            );
+            return {
+                _id: reqInfo?._id || u._id,
+                receiver: {
+                    _id: u._id,
+                    fullName: u.fullName,
+                    username: u.username,
+                    profilePhoto: u.profilePhoto,
+                    bio: u.bio || ""
+                },
+                createdAt: reqInfo?.createdAt || u.createdAt,
+                status: "pending"
+            };
+        });
+
+        return res.status(200).json({ incoming, outgoing });
     } catch (error) {
         console.error("Get Friend Requests Error:", error);
         return res.status(500).json({ message: "Internal server error", success: false });
+    }
+};
+
+// ─── CANCEL FRIEND REQUEST (Sender cancels outgoing pending request) ───────────
+export const cancelFriendRequest = async (req, res) => {
+    try {
+        const loggedInUserId = req.id;
+        const receiverId = req.params.id;
+
+        const cleanSenderId = String(loggedInUserId || "").trim();
+        const cleanReceiverId = String(receiverId || "").trim();
+
+        if (!cleanReceiverId || !mongoose.Types.ObjectId.isValid(cleanReceiverId)) {
+            return res.status(400).json({ message: "Invalid user ID", success: false });
+        }
+
+        await User.findByIdAndUpdate(cleanReceiverId, {
+            $pull: { friendRequests: { sender: cleanSenderId, status: "pending" } }
+        });
+
+        return res.status(200).json({ message: "Friend request cancelled", success: true });
+    } catch (error) {
+        console.error("Cancel Friend Request Error:", error);
+        return res.status(500).json({ message: error.message || "Internal server error", success: false });
     }
 };
 
