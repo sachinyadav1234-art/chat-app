@@ -341,6 +341,7 @@ const CallModal = () => {
         return () => {
             active = false;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isCalling, socket, targetUser, selectedUser]);
 
     // ─── Socket Event Listeners for Call Termination ─────────────────
@@ -365,6 +366,7 @@ const CallModal = () => {
             socket.off('callEnded', handleCallEnded);
             socket.off('callRejected', handleCallRejected);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, caller, targetUser, selectedUser]);
 
     // ─── Cleanup Helper ──────────────────────────────────────────────

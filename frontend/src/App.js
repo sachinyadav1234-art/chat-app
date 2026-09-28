@@ -77,6 +77,7 @@ function App() {
         };
 
         fetchInitialData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authUser?._id, token, dispatch]);
 
     // Socket Connection & Event Listeners
@@ -150,6 +151,7 @@ function App() {
                 dispatch(setSocket(null));
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authUser?._id]);
 
     return (
