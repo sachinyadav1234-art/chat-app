@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import Peer from 'simple-peer';
 import toast from 'react-hot-toast';
 import {
     resetCall,
@@ -134,6 +133,7 @@ const ICE_SERVERS = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
     ]
 };
 
@@ -157,8 +157,9 @@ const CallModal = () => {
     const myVideoRef = useRef(null);
     const peerVideoRef = useRef(null);
     const peerAudioRef = useRef(null);
-    const connectionRef = useRef(null);
+    const peerConnectionRef = useRef(null);
     const myStreamRef = useRef(null);
+    const pendingIceCandidatesRef = useRef([]);
 
     const [localStream, setLocalStream] = useState(null);
     const [remoteStream, setRemoteStream] = useState(null);
@@ -184,27 +185,82 @@ const CallModal = () => {
         }
     }, [remoteStream, callAccepted, callType]);
 
-    // ─── Acquire Local Media Stream ──────────────────────────────────
-    const getStream = useCallback(async (videoRequested = true) => {
-        try {
-            const constraints = {
-                audio: true,
-                video: videoRequested && callType === 'video' ? {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    facingMode: 'user'
-                } : false
-            };
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            myStreamRef.current = stream;
-            setLocalStream(stream);
-            return stream;
-        } catch (err) {
-            console.error("Error accessing media devices:", err);
-            toast.error("Could not access microphone or camera. Please check browser permissions.");
+    // ─── Helper for Graceful Error Reporting ─────────────────────────
+    const handleMediaError = useCallback((err) => {
+        console.error("Media devices access error:", err);
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            toast.error("Camera/Microphone permission denied. Please allow permission in browser settings.");
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            toast.error("No camera or microphone found on your device.");
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            toast.error("Camera or microphone is already in use by another app.");
+        } else if (err.name === 'OverconstrainedError') {
+            toast.error("Requested video resolution not supported by camera.");
+        } else {
+            toast.error(`Could not access media: ${err.message || err.name}`);
+        }
+    }, []);
+
+    // ─── Acquire Local Media Stream with Multi-Tier Fallback ──────────
+    const acquireMedia = useCallback(async (videoRequested = true) => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            toast.error("Media devices not supported in this browser context (HTTPS required).");
             return null;
         }
-    }, [callType]);
+
+        let stream = null;
+        const wantVideo = videoRequested && callType === 'video';
+
+        if (wantVideo) {
+            // 1. Try optimal HD constraints
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+                });
+            } catch (err1) {
+                console.warn("HD Video failed, trying basic video:", err1);
+                // 2. Try generic video constraints
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: true
+                    });
+                } catch (err2) {
+                    console.warn("Basic video failed, checking audio fallback:", err2);
+                    if (err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError') {
+                        handleMediaError(err2);
+                        return null;
+                    }
+                    // 3. Fallback to audio-only if camera device is missing or unreadable
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        toast("Camera not available. Continuing with audio only.", { icon: "🎙️" });
+                    } catch (err3) {
+                        handleMediaError(err3);
+                        return null;
+                    }
+                }
+            }
+        } else {
+            // Audio call
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: false
+                });
+            } catch (err) {
+                handleMediaError(err);
+                return null;
+            }
+        }
+
+        if (stream) {
+            myStreamRef.current = stream;
+            setLocalStream(stream);
+        }
+        return stream;
+    }, [callType, handleMediaError]);
 
     // ─── Call Duration Timer ─────────────────────────────────────────
     useEffect(() => {
@@ -237,138 +293,6 @@ const CallModal = () => {
         return () => sounds.stop();
     }, [isReceivingCall, isCalling, callAccepted]);
 
-    // ─── Answer Incoming Call ────────────────────────────────────────
-    const answerCall = async () => {
-        sounds.stop();
-        const stream = await getStream();
-        if (!stream) {
-            rejectCall();
-            return;
-        }
-
-        dispatch(setCallAccepted(true));
-
-        const peer = new Peer({
-            initiator: false,
-            trickle: false,
-            stream,
-            config: ICE_SERVERS
-        });
-
-        peer.on('signal', (data) => {
-            if (socket && caller?._id) {
-                socket.emit('answerCall', { signal: data, to: caller._id });
-            }
-        });
-
-        peer.on('stream', (incomingStream) => {
-            setRemoteStream(incomingStream);
-        });
-
-        peer.on('error', (err) => {
-            console.error('Peer connection error:', err);
-            endCall();
-        });
-
-        peer.on('close', () => {
-            endCall();
-        });
-
-        if (callerSignal) {
-            peer.signal(callerSignal);
-        }
-        connectionRef.current = peer;
-    };
-
-    // ─── Outgoing Call Initiation ────────────────────────────────────
-    useEffect(() => {
-        const target = targetUser || selectedUser;
-        if (!isCalling || !target || callAccepted || !socket) return;
-
-        let active = true;
-        (async () => {
-            const stream = await getStream();
-            if (!stream || !active) {
-                if (!stream) dispatch(resetCall());
-                return;
-            }
-
-            const peer = new Peer({
-                initiator: true,
-                trickle: false,
-                stream,
-                config: ICE_SERVERS
-            });
-
-            peer.on('signal', (data) => {
-                socket.emit('callUser', {
-                    userToCall: target._id,
-                    signalData: data,
-                    from: authUser._id,
-                    fromUser: {
-                        _id: authUser._id,
-                        fullName: authUser.fullName,
-                        profilePhoto: authUser.profilePhoto,
-                        username: authUser.username
-                    },
-                    callType
-                });
-            });
-
-            peer.on('stream', (incomingStream) => {
-                setRemoteStream(incomingStream);
-            });
-
-            peer.on('error', (err) => {
-                console.error('Caller peer connection error:', err);
-                endCall();
-            });
-
-            peer.on('close', () => {
-                endCall();
-            });
-
-            const onCallAccepted = (signal) => {
-                sounds.stop();
-                dispatch(setCallAccepted(true));
-                peer.signal(signal);
-            };
-
-            socket.once('callAccepted', onCallAccepted);
-            connectionRef.current = peer;
-        })();
-
-        return () => {
-            active = false;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isCalling, socket, targetUser, selectedUser]);
-
-    // ─── Socket Event Listeners for Call Termination ─────────────────
-    useEffect(() => {
-        if (!socket) return;
-
-        const handleCallEnded = () => {
-            toast('Call ended', { icon: '📞' });
-            cleanupAndReset();
-        };
-
-        const handleCallRejected = (data) => {
-            const reason = data?.reason || 'Call was declined';
-            toast.error(reason);
-            cleanupAndReset();
-        };
-
-        socket.on('callEnded', handleCallEnded);
-        socket.on('callRejected', handleCallRejected);
-
-        return () => {
-            socket.off('callEnded', handleCallEnded);
-            socket.off('callRejected', handleCallRejected);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [socket, caller, targetUser, selectedUser]);
-
     // ─── Cleanup Helper ──────────────────────────────────────────────
     const cleanupAndReset = useCallback(() => {
         sounds.playEndTone();
@@ -383,20 +307,224 @@ const CallModal = () => {
         }
         setLocalStream(null);
         setRemoteStream(null);
+        pendingIceCandidatesRef.current = [];
 
-        if (connectionRef.current) {
+        if (peerConnectionRef.current) {
             try {
-                connectionRef.current.destroy();
+                peerConnectionRef.current.close();
             } catch (e) {
                 // ignore
             }
-            connectionRef.current = null;
+            peerConnectionRef.current = null;
         }
 
         setTimeout(() => {
             dispatch(resetCall());
         }, 400);
     }, [dispatch]);
+
+    // ─── Create RTCPeerConnection Helper ─────────────────────────────
+    const createPeerConnection = useCallback((targetId, stream) => {
+        const pc = new RTCPeerConnection(ICE_SERVERS);
+        peerConnectionRef.current = pc;
+
+        // Add local tracks
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
+            });
+        }
+
+        // Remote track received
+        pc.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                setRemoteStream(event.streams[0]);
+            }
+        };
+
+        // ICE Candidate discovered
+        pc.onicecandidate = (event) => {
+            if (event.candidate && socket && targetId) {
+                socket.emit('iceCandidate', {
+                    to: targetId,
+                    candidate: event.candidate
+                });
+            }
+        };
+
+        // Connection state changes
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                console.log("Peer connection state:", pc.connectionState);
+            }
+        };
+
+        return pc;
+    }, [socket]);
+
+    // ─── Answer Incoming Call (Callee) ────────────────────────────────
+    const answerCall = async () => {
+        sounds.stop();
+        const stream = await acquireMedia(callType === 'video');
+        if (!stream && callType === 'audio') {
+            rejectCall();
+            return;
+        }
+
+        dispatch(setCallAccepted(true));
+
+        const targetId = caller?._id;
+        const pc = createPeerConnection(targetId, stream);
+
+        try {
+            if (callerSignal) {
+                await pc.setRemoteDescription(new RTCSessionDescription(callerSignal));
+
+                // Process any queued ICE candidates
+                while (pendingIceCandidatesRef.current.length > 0) {
+                    const candidate = pendingIceCandidatesRef.current.shift();
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (err) {
+                        console.warn("Error adding queued ICE candidate:", err);
+                    }
+                }
+            }
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            if (socket && targetId) {
+                socket.emit('answerCall', { signal: answer, to: targetId });
+            }
+        } catch (err) {
+            console.error("Error creating WebRTC answer:", err);
+            toast.error("Failed to establish peer connection");
+            endCall();
+        }
+    };
+
+    // ─── Outgoing Call Initiation (Caller) ────────────────────────────
+    useEffect(() => {
+        const target = targetUser || selectedUser;
+        if (!isCalling || !target || callAccepted || !socket) return;
+
+        let isCancelled = false;
+
+        const initiateCall = async () => {
+            const stream = await acquireMedia(callType === 'video');
+            if (isCancelled) {
+                if (stream) stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            if (!stream) {
+                dispatch(resetCall());
+                return;
+            }
+
+            const targetId = target._id;
+            const pc = createPeerConnection(targetId, stream);
+
+            try {
+                const offer = await pc.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: callType === 'video'
+                });
+                await pc.setLocalDescription(offer);
+
+                socket.emit('callUser', {
+                    userToCall: targetId,
+                    signalData: offer,
+                    from: authUser._id,
+                    fromUser: {
+                        _id: authUser._id,
+                        fullName: authUser.fullName,
+                        profilePhoto: authUser.profilePhoto,
+                        username: authUser.username
+                    },
+                    callType
+                });
+            } catch (err) {
+                console.error("Error creating WebRTC offer:", err);
+                toast.error("Failed to initiate call");
+                cleanupAndReset();
+            }
+        };
+
+        initiateCall();
+
+        return () => {
+            isCancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCalling, socket, targetUser, selectedUser]);
+
+    // ─── Socket Event Listeners for Call Signaling ────────────────────
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleCallAccepted = async (answerSignal) => {
+            sounds.stop();
+            dispatch(setCallAccepted(true));
+
+            const pc = peerConnectionRef.current;
+            if (pc && pc.signalingState !== 'closed') {
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(answerSignal));
+
+                    // Process any queued ICE candidates
+                    while (pendingIceCandidatesRef.current.length > 0) {
+                        const candidate = pendingIceCandidatesRef.current.shift();
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        } catch (err) {
+                            console.warn("Error adding queued ICE candidate:", err);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error setting remote description for answer:", err);
+                }
+            }
+        };
+
+        const handleIceCandidate = async ({ candidate }) => {
+            if (!candidate) return;
+            const pc = peerConnectionRef.current;
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                    console.warn("Failed to add ICE candidate:", err);
+                }
+            } else {
+                pendingIceCandidatesRef.current.push(candidate);
+            }
+        };
+
+        const handleCallEnded = () => {
+            toast('Call ended', { icon: '📞' });
+            cleanupAndReset();
+        };
+
+        const handleCallRejected = (data) => {
+            const reason = data?.reason || 'Call was declined';
+            toast.error(reason);
+            cleanupAndReset();
+        };
+
+        socket.on('callAccepted', handleCallAccepted);
+        socket.on('iceCandidate', handleIceCandidate);
+        socket.on('callEnded', handleCallEnded);
+        socket.on('callRejected', handleCallRejected);
+
+        return () => {
+            socket.off('callAccepted', handleCallAccepted);
+            socket.off('iceCandidate', handleIceCandidate);
+            socket.off('callEnded', handleCallEnded);
+            socket.off('callRejected', handleCallRejected);
+        };
+    }, [socket, cleanupAndReset, dispatch]);
 
     // ─── End Active Call ─────────────────────────────────────────────
     const endCall = () => {
@@ -420,10 +548,11 @@ const CallModal = () => {
     const toggleMute = () => {
         if (myStreamRef.current) {
             const audioTracks = myStreamRef.current.getAudioTracks();
+            const nextMuted = !isMuted;
             audioTracks.forEach(track => {
-                track.enabled = !track.enabled;
+                track.enabled = !nextMuted;
             });
-            dispatch(setIsMuted(!isMuted));
+            dispatch(setIsMuted(nextMuted));
         }
     };
 
@@ -431,10 +560,11 @@ const CallModal = () => {
     const toggleVideo = () => {
         if (myStreamRef.current) {
             const videoTracks = myStreamRef.current.getVideoTracks();
+            const nextVideoOff = !isVideoOff;
             videoTracks.forEach(track => {
-                track.enabled = !track.enabled;
+                track.enabled = !nextVideoOff;
             });
-            dispatch(setIsVideoOff(!isVideoOff));
+            dispatch(setIsVideoOff(nextVideoOff));
         }
     };
 
@@ -444,28 +574,42 @@ const CallModal = () => {
             try {
                 const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                 const screenTrack = screenStream.getVideoTracks()[0];
-                if (connectionRef.current && connectionRef.current._pc) {
-                    const sender = connectionRef.current._pc.getSenders().find(s => s.track?.kind === 'video');
-                    if (sender) sender.replaceTrack(screenTrack);
+                const pc = peerConnectionRef.current;
+                if (pc) {
+                    const senders = pc.getSenders();
+                    const videoSender = senders.find(s => s.track?.kind === 'video');
+                    if (videoSender) {
+                        videoSender.replaceTrack(screenTrack);
+                    }
                 }
                 screenTrack.onended = () => {
-                    toggleScreenShare();
+                    stopScreenSharing();
                 };
                 setIsScreenSharing(true);
             } catch (err) {
                 console.error('Screen sharing error:', err);
-                toast.error("Screen sharing was cancelled or not supported");
-            }
-        } else {
-            if (myStreamRef.current) {
-                const videoTrack = myStreamRef.current.getVideoTracks()[0];
-                if (connectionRef.current && connectionRef.current._pc && videoTrack) {
-                    const sender = connectionRef.current._pc.getSenders().find(s => s.track?.kind === 'video');
-                    if (sender) sender.replaceTrack(videoTrack);
+                if (err.name !== 'NotAllowedError') {
+                    toast.error("Screen sharing was cancelled or not supported");
                 }
             }
-            setIsScreenSharing(false);
+        } else {
+            stopScreenSharing();
         }
+    };
+
+    const stopScreenSharing = () => {
+        if (myStreamRef.current) {
+            const originalVideoTrack = myStreamRef.current.getVideoTracks()[0];
+            const pc = peerConnectionRef.current;
+            if (pc && originalVideoTrack) {
+                const senders = pc.getSenders();
+                const videoSender = senders.find(s => s.track?.kind === 'video');
+                if (videoSender) {
+                    videoSender.replaceTrack(originalVideoTrack);
+                }
+            }
+        }
+        setIsScreenSharing(false);
     };
 
     const isVisible = isReceivingCall || isCalling || callAccepted;
@@ -473,7 +617,7 @@ const CallModal = () => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-fadeIn">
-            {/* Hidden audio element for remote voice in audio calls */}
+            {/* Hidden audio element for remote audio in audio/video calls */}
             <audio ref={peerAudioRef} autoPlay playsInline />
 
             {/* ─── INCOMING CALL DIALOG ─── */}
